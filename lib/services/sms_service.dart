@@ -73,14 +73,14 @@ class SMSService {
 
   // Amount patterns for better extraction
   static List<RegExp> amountPatterns = [
-    RegExp(r'RS\.?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)', caseSensitive: false),
-    RegExp(r'RS:\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)', caseSensitive: false),
-    RegExp(r'INR\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)', caseSensitive: false),
-    RegExp(r'₹\s*(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)', caseSensitive: false),
-    RegExp(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*RS', caseSensitive: false),
-    RegExp(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*INR', caseSensitive: false),
-    RegExp(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*₹', caseSensitive: false),
-    RegExp(r'(\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?)\s*/-', caseSensitive: false),
+    RegExp(r'RS\.?\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)', caseSensitive: false),
+    RegExp(r'RS:\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)', caseSensitive: false),
+    RegExp(r'INR\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)', caseSensitive: false),
+    RegExp(r'₹\s*(\d+(?:,\d+)*(?:\.\d{1,2})?)', caseSensitive: false),
+    RegExp(r'(\d+(?:,\d+)*(?:\.\d{1,2})?)\s*RS', caseSensitive: false),
+    RegExp(r'(\d+(?:,\d+)*(?:\.\d{1,2})?)\s*INR', caseSensitive: false),
+    RegExp(r'(\d+(?:,\d+)*(?:\.\d{1,2})?)\s*₹', caseSensitive: false),
+    RegExp(r'(\d+(?:,\d+)*(?:\.\d{1,2})?)\s*/-', caseSensitive: false),
   ];
 
   bool _looksLikePhoneOrRef(String body, Match match) {
@@ -152,8 +152,11 @@ class SMSService {
     }
   }
 
-  // Get recent SMS messages using another_telephony
-  Future<List<SmsMessage>> getRecentSMS({int limit = 100}) async {
+  // Get all SMS messages with pagination support
+  Future<List<SmsMessage>> getAllSMS({
+    int batchSize = 1000,
+    int maxMessages = 10000,
+  }) async {
     try {
       print('🔍 Checking SMS permission...');
       if (!await hasSMSPermission()) {
@@ -165,32 +168,107 @@ class SMSService {
       print('📱 Initializing Telephony...');
       final Telephony telephony = Telephony.instance;
 
-      print('📨 Fetching SMS messages...');
-      final List<SmsMessage> messages = await telephony.getInboxSms(
-        columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
-        sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
-      );
+      print('📨 Fetching ALL SMS messages with pagination...');
+      List<SmsMessage> allMessages = [];
+      int offset = 0;
+      int totalFetched = 0;
 
-      print('📊 Total SMS messages fetched: ${messages.length}');
-
-      // Log first few messages for debugging
-      for (int i = 0; i < (messages.length > 3 ? 3 : messages.length); i++) {
-        final msg = messages[i];
+      while (totalFetched < maxMessages) {
         print(
-          '📧 SMS ${i + 1}: From: ${msg.address}, Body: ${msg.body?.substring(0, (msg.body?.length ?? 0) > 50 ? 50 : msg.body?.length ?? 0)}...',
+          '📦 Fetching batch ${(offset / batchSize).floor() + 1} (offset: $offset, limit: $batchSize)',
         );
+
+        try {
+          final List<SmsMessage> batch = await telephony.getInboxSms(
+            columns: [SmsColumn.ADDRESS, SmsColumn.BODY, SmsColumn.DATE],
+            sortOrder: [OrderBy(SmsColumn.DATE, sort: Sort.DESC)],
+            // Note: another_telephony might not support offset/limit directly
+            // We'll handle this by fetching all and then slicing
+          );
+
+          if (batch.isEmpty) {
+            print('📭 No more messages found, stopping pagination');
+            break;
+          }
+
+          // Apply offset and limit manually since the plugin might not support it
+          final startIndex = offset;
+          final endIndex = (offset + batchSize).clamp(0, batch.length);
+
+          if (startIndex >= batch.length) {
+            print('📭 Reached end of available messages');
+            break;
+          }
+
+          final slicedBatch = batch.sublist(startIndex, endIndex);
+          allMessages.addAll(slicedBatch);
+
+          print(
+            '📊 Batch ${(offset / batchSize).floor() + 1}: Fetched ${slicedBatch.length} messages',
+          );
+          print('📈 Total messages so far: ${allMessages.length}');
+
+          // If we got fewer messages than requested, we've reached the end
+          if (slicedBatch.length < batchSize) {
+            print(
+              '📭 Reached end of messages (got ${slicedBatch.length} < $batchSize)',
+            );
+            break;
+          }
+
+          offset += batchSize;
+          totalFetched += slicedBatch.length;
+
+          // Small delay to prevent overwhelming the system
+          await Future.delayed(const Duration(milliseconds: 100));
+        } catch (e) {
+          print('⚠️ Error fetching batch at offset $offset: $e');
+          // Continue with next batch or break if critical error
+          if (e.toString().contains('permission') ||
+              e.toString().contains('denied')) {
+            break;
+          }
+          offset += batchSize;
+        }
       }
 
-      // If the API does not support a 'count' parameter, limit manually
-      final limitedMessages = messages.take(limit).toList();
-      print(
-        '📋 Returning ${limitedMessages.length} messages (limited to $limit)',
-      );
+      print('📊 Total SMS messages fetched: ${allMessages.length}');
+      print('📋 Final count: ${allMessages.length} messages');
 
-      return limitedMessages;
+      // Log sample messages for debugging
+      if (allMessages.isNotEmpty) {
+        print('📧 Sample messages:');
+        for (
+          int i = 0;
+          i < (allMessages.length > 5 ? 5 : allMessages.length);
+          i++
+        ) {
+          final msg = allMessages[i];
+          print('  ${i + 1}. From: ${msg.address}');
+          print(
+            '     Body: ${msg.body?.substring(0, (msg.body?.length ?? 0) > 80 ? 80 : msg.body?.length ?? 0)}...',
+          );
+          print('     Date: ${msg.date}');
+        }
+      }
+
+      return allMessages;
     } catch (e) {
       print('❌ Error reading SMS: $e');
       throw Exception('Failed to read SMS: $e');
+    }
+  }
+
+  // Get recent SMS messages (backward compatibility)
+  Future<List<SmsMessage>> getRecentSMS({int limit = 100}) async {
+    try {
+      final allMessages = await getAllSMS(
+        maxMessages: limit * 2,
+      ); // Get more to ensure we have enough
+      return allMessages.take(limit).toList();
+    } catch (e) {
+      print('❌ Error in getRecentSMS: $e');
+      rethrow;
     }
   }
 
@@ -738,6 +816,56 @@ class SMSService {
     } catch (e) {
       print('❌ Error getting recent transactions: $e');
       throw Exception('Failed to get recent transactions: $e');
+    }
+  }
+
+  // Get all transactions from SMS (comprehensive scanning)
+  Future<List<TransactionSMS>> getAllTransactions() async {
+    try {
+      print('🚀 Starting comprehensive SMS transaction scan...');
+
+      // Get all SMS messages
+      final messages = await getAllSMS(maxMessages: 5000); // Reasonable limit
+      print('📨 Retrieved ${messages.length} SMS messages');
+
+      // Filter for bank SMS
+      final bankMessages = filterBankSMS(messages);
+      print('🏦 Found ${bankMessages.length} bank-related SMS messages');
+
+      // Parse transactions
+      final transactions = <TransactionSMS>[];
+      for (int i = 0; i < bankMessages.length; i++) {
+        final message = bankMessages[i];
+        print(
+          '📝 Parsing message ${i + 1}/${bankMessages.length}: ${message.address}',
+        );
+
+        try {
+          final transaction = parseTransactionSMS(message);
+          if (transaction != null) {
+            print(
+              '✅ Parsed transaction: ${transaction.bankName} - ₹${transaction.amount} (${transaction.transactionType})',
+            );
+            transactions.add(transaction);
+          } else {
+            print('❌ Failed to parse transaction from: ${message.address}');
+          }
+        } catch (e) {
+          print('⚠️ Error parsing SMS from ${message.address}: $e');
+          // Continue with other messages
+        }
+      }
+
+      // Sort by date (most recent first)
+      transactions.sort((a, b) => b.date.compareTo(a.date));
+
+      print(
+        '🎉 Comprehensive scan complete! Found ${transactions.length} valid transactions',
+      );
+      return transactions;
+    } catch (e) {
+      print('❌ Error in getAllTransactions: $e');
+      rethrow;
     }
   }
 

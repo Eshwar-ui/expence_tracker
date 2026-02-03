@@ -1,3 +1,5 @@
+import 'expence.dart';
+
 class AnalyticsData {
   final double totalIncome;
   final double totalExpenses;
@@ -6,6 +8,7 @@ class AnalyticsData {
   final Map<String, double> monthlyBreakdown;
   final Map<String, double> dailyBreakdown;
   final List<TransactionTrend> trends;
+  final List<Expense> recentExpenses;
   final BudgetStatus budgetStatus;
 
   AnalyticsData({
@@ -16,6 +19,7 @@ class AnalyticsData {
     required this.monthlyBreakdown,
     required this.dailyBreakdown,
     required this.trends,
+    required this.recentExpenses,
     required this.budgetStatus,
   });
 
@@ -38,6 +42,7 @@ class AnalyticsData {
       'monthlyBreakdown': monthlyBreakdown,
       'dailyBreakdown': dailyBreakdown,
       'trends': trends.map((t) => t.toJson()).toList(),
+      'recentExpenses': recentExpenses.map((e) => e.toJson()).toList(),
       'budgetStatus': budgetStatus.toJson(),
     };
   }
@@ -52,6 +57,9 @@ class AnalyticsData {
       dailyBreakdown: Map<String, double>.from(json['dailyBreakdown']),
       trends: (json['trends'] as List)
           .map((t) => TransactionTrend.fromJson(t))
+          .toList(),
+      recentExpenses: (json['recentExpenses'] as List)
+          .map((e) => Expense.fromJson(e))
           .toList(),
       budgetStatus: BudgetStatus.fromJson(json['budgetStatus']),
     );

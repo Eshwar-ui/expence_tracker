@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:expence_tracker/services/auth_service.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
+import 'package:expence_tracker/utils/app_design_system.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -176,7 +178,42 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
 
-            // Profile Options
+            // Financial Management Section
+            Text(
+              'Financial Management',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildProfileOption(
+              context,
+              icon: Icons.account_balance_wallet,
+              title: 'Budget Planner',
+              subtitle: 'Manage your budgets and spending limits',
+              onTap: () => Navigator.pushNamed(context, '/budget'),
+            ),
+            _buildProfileOption(
+              context,
+              icon: Icons.repeat,
+              title: 'Recurring Transactions',
+              subtitle: 'Set up automatic recurring payments',
+              onTap: () => Navigator.pushNamed(context, '/recurring'),
+            ),
+            const SizedBox(height: 24),
+
+            // Account Settings Section
+            Text(
+              'Account Settings',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: 12),
             _buildProfileOption(
               context,
               icon: Icons.person_outline,
@@ -253,7 +290,7 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 100),
+            const SizedBox(height: 120),
           ],
         ),
       ),
@@ -383,76 +420,54 @@ class ProfileScreen extends StatelessWidget {
   }
 
   void _showLogoutDialog(BuildContext context) {
-    showDialog(
+    showDesignSystemDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await AuthService().signOut();
-                Navigator.of(context).pushReplacementNamed('/auth');
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Sign out failed: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Sign Out', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of your account?',
+      confirmLabel: 'Sign Out',
+      onConfirm: () async {
+        try {
+          await AuthService().signOut();
+          Navigator.of(context).pushReplacementNamed('/auth');
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Sign out failed: $e'),
+              backgroundColor: AppDesignSystem.error,
+            ),
+          );
+        }
+      },
     );
   }
 
   void _showDeleteAccountDialog(BuildContext context) {
-    showDialog(
+    showDesignSystemDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          'This action cannot be undone. All your data will be permanently deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                await AuthService().deleteAccount();
-                Navigator.of(context).pushReplacementNamed('/auth');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Account deletion Successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Account deletion failed: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Delete Account',
+      message:
+          'This action cannot be undone. All your data will be permanently deleted from our servers.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () async {
+        try {
+          await AuthService().deleteAccount();
+          Navigator.of(context).pushReplacementNamed('/auth');
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Account deleted successfully'),
+              backgroundColor: AppDesignSystem.success,
+            ),
+          );
+        } catch (e) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Account deletion failed: $e'),
+              backgroundColor: AppDesignSystem.error,
+            ),
+          );
+        }
+      },
     );
   }
 

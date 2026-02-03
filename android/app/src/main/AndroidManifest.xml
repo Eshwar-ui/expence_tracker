@@ -3,6 +3,10 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     
+    <!-- Permission to query all packages (required for Android 11+ to detect UPI apps) -->
+    <!-- Note: This is a restricted permission and may require special approval for Play Store -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    
     <application
         android:label="expence_tracker"
         android:name="${applicationName}"
@@ -45,5 +49,23 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Query for UPI apps -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+        <!-- Specific UPI app package names for Android 11+ -->
+        <package android:name="com.google.android.apps.nbu.paisa.user" /> <!-- Google Pay -->
+        <package android:name="com.phonepe.app" /> <!-- PhonePe -->
+        <package android:name="net.one97.paytm" /> <!-- Paytm -->
+        <package android:name="in.org.npci.upiapp" /> <!-- BHIM -->
+        <package android:name="com.amazon.mobile.android" /> <!-- Amazon Pay -->
+        <package android:name="com.whatsapp" /> <!-- WhatsApp Pay -->
+        <package android:name="com.mobikwik_new" /> <!-- MobiKwik -->
+        <package android:name="com.freecharge.android" /> <!-- Freecharge -->
+        <package android:name="com.airtel.money" /> <!-- Airtel Thanks -->
+        <package android:name="com.axis.mobile" /> <!-- Axis Pay -->
+        <package android:name="com.hdfcbank.hdfcpayzapp" /> <!-- PayZapp -->
+        <package android:name="com.sbi.SBIFreedomPlus" /> <!-- SBI Pay -->
     </queries>
 </manifest>

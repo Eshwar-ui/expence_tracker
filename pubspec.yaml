@@ -54,6 +54,14 @@ dependencies:
   fl_chart: ^0.68.0
   google_fonts: ^6.3.2
   flutter_svg: ^2.2.1
+  mobile_scanner: ^5.2.3
+  url_launcher: ^6.3.0
+
+  # UPI payment integration with payment status tracking
+  flutter_upi_india: ^1.0.1
+
+  # TensorFlow Lite for AI expense prediction
+  tflite_flutter: ^0.11.0
 
 dev_dependencies:
   flutter_test:
@@ -65,6 +73,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
+  # Native splash screen and launcher icons
+  flutter_native_splash: ^2.4.1
+  flutter_launcher_icons: ^0.13.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -81,6 +93,7 @@ flutter:
     - assets/
     - assets/income_arrow.svg
     - assets/expense_arrow.svg
+    - assets/models/
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg
 
@@ -109,3 +122,23 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+# Native splash screen configuration
+flutter_native_splash:
+  color: "#0F0F23" # Match your app's background color
+  image: assets/App_logo.png
+  android: true
+  ios: true
+  web: false
+
+# App launcher icon configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/App_logo.png"
+  min_sdk_android: 21 # Android 5.0+
+  web:
+    generate: true
+    image_path: "assets/App_logo.png"
+    background_color: "#0F0F23"
+    theme_color: "#6366F1"

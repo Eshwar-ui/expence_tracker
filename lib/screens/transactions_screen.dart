@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/services/firestore_service.dart';
+import 'package:expence_tracker/utils/app_design_system.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
+import 'package:expence_tracker/screens/expense_dialog.dart';
 
 class TransactionsScreen extends StatefulWidget {
   const TransactionsScreen({super.key});
@@ -13,18 +16,17 @@ class TransactionsScreen extends StatefulWidget {
 class _TransactionsScreenState extends State<TransactionsScreen> {
   final FirestoreService _firestore = FirestoreService();
   bool _loading = true;
-  List<Expense> _items = [];
+  List<Expense> _allTransactions = [];
+  List<Expense> _displayTransactions = [];
+
+  String _searchQuery = "";
+  String _activeFilter = "All"; // All, Income, Expense
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
-  }
-
-  @override
-  void dispose() {
-    // Clean up any resources if needed
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -33,10 +35,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     try {
       final items = await _firestore.getExpenses();
       if (!mounted) return;
-      // Sort by date in descending order (latest first)
       items.sort((a, b) => b.date.compareTo(a.date));
       setState(() {
-        _items = items;
+        _allTransactions = items;
+        _applyFilters();
         _loading = false;
       });
     } catch (e) {
@@ -45,318 +47,370 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load: $e'),
-          backgroundColor: Colors.red,
+          backgroundColor: AppDesignSystem.error,
         ),
       );
     }
   }
 
+  void _applyFilters() {
+    setState(() {
+      _displayTransactions = _allTransactions.where((e) {
+        final matchesSearch =
+            e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            e.category.toLowerCase().contains(_searchQuery.toLowerCase());
+
+        bool matchesType = true;
+        if (_activeFilter == "Income") {
+          matchesType = e.type == TransactionType.income;
+        } else if (_activeFilter == "Expense") {
+          matchesType = e.type == TransactionType.expense;
+        }
+
+        return matchesSearch && matchesType;
+      }).toList();
+    });
+  }
+
+  Map<String, List<Expense>> _groupTransactions() {
+    final Map<String, List<Expense>> groups = {};
+    for (var e in _displayTransactions) {
+      final monthKey = DateFormat('MMMM yyyy').format(e.date);
+      if (groups[monthKey] == null) groups[monthKey] = [];
+      groups[monthKey]!.add(e);
+    }
+    return groups;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final grouped = _groupTransactions();
+    final months = grouped.keys.toList();
+
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          'Transactions',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
-          ),
-        ),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: PremiumAppBar(
+        title: 'Transactions',
         actions: [
           IconButton(
-            onPressed: _load,
-            icon: Icon(
-              Icons.refresh,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            tooltip: 'Refresh',
+            onPressed: () => Navigator.pushNamed(context, '/scan'),
+            icon: const Icon(Icons.add_rounded),
           ),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
           IconButton(
             onPressed: () => Navigator.pushNamed(context, '/scan'),
-            icon: Icon(
-              Icons.qr_code_scanner,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            tooltip: 'Scan SMS',
+            icon: const Icon(Icons.qr_code_scanner_rounded),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty
-          ? _empty()
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemBuilder: (_, i) => _tile(_items[i]),
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemCount: _items.length,
+      body: Column(
+        children: [
+          _buildSearchAndFilter(theme),
+          Expanded(
+            child: _loading
+                ? const DesignSystemLoading()
+                : _displayTransactions.isEmpty
+                ? _empty()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDesignSystem.s24,
+                    ),
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: months.length,
+                    itemBuilder: (context, index) {
+                      final month = months[index];
+                      final monthItems = grouped[month]!;
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildMonthHeader(theme, month),
+                          ...monthItems.map(
+                            (e) => Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppDesignSystem.s12,
+                              ),
+                              child: PremiumTransactionTile(
+                                title: e.title,
+                                category: e.category,
+                                amount: e.amount,
+                                date: e.date,
+                                isIncome: e.type == TransactionType.income,
+                                onTap: () =>
+                                    _showTransactionDetails(context, e),
+                              ),
+                            ),
+                          ),
+                          if (index == months.length - 1)
+                            const VSpace(120)
+                          else
+                            const VSpace.lg(),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchAndFilter(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+        AppDesignSystem.s24,
+        AppDesignSystem.s8,
+        AppDesignSystem.s24,
+        AppDesignSystem.s16,
+      ),
+      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
+      child: Column(
+        children: [
+          // Search Input
+          DesignSystemTextField(
+            controller: _searchController,
+            label: 'Search',
+            hint: 'Search transactions...',
+            icon: Icons.search_rounded,
+            onChanged: (val) {
+              _searchQuery = val;
+              _applyFilters();
+            },
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () {
+                      _searchController.clear();
+                      _searchQuery = "";
+                      _applyFilters();
+                    },
+                  )
+                : null,
+          ),
+          const VSpace.md(),
+          // Filter Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ["All", "Income", "Expense"].map((filter) {
+                final isActive = _activeFilter == filter;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(filter),
+                    selected: isActive,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() => _activeFilter = filter);
+                        _applyFilters();
+                      }
+                    },
+                    backgroundColor: theme.colorScheme.surface,
+                    selectedColor: theme.colorScheme.primary.withOpacity(0.2),
+                    labelStyle: TextStyle(
+                      color: isActive
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                      fontWeight: isActive
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                    side: BorderSide(
+                      color: isActive
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.outline.withOpacity(0.2),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, '/scan'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Scan SMS', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthHeader(ThemeData theme, String month) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDesignSystem.s16),
+      child: Row(
+        children: [
+          Text(
+            month.split(' ').first,
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const HSpace.sm(),
+          Text(
+            month.split(' ').last,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.3),
+            ),
+          ),
+          const HSpace.md(),
+          Expanded(
+            child: Container(
+              height: 1,
+              color: theme.colorScheme.onSurface.withOpacity(0.05),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _empty() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long, size: 56, color: Colors.grey[400]),
-          const SizedBox(height: 12),
-          Text(
-            'No transactions yet',
-            style: TextStyle(color: Colors.grey[600]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tile(Expense e) {
-    final isIncome = e.type == TransactionType.income;
-    return InkWell(
-      onTap: () => _showTransactionDetails(context, e),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: (isIncome ? Colors.green : Colors.red).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                isIncome ? Icons.trending_up : Icons.trending_down,
-                color: isIncome ? Colors.green : Colors.red,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    e.title,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${e.category} • ${DateFormat('MMM dd, yyyy').format(e.date)}',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-            Text(
-              '${isIncome ? '+' : '-'}₹${e.amount.toStringAsFixed(0)}',
-              style: TextStyle(
-                color: isIncome ? Colors.green : Colors.red,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return const DesignSystemEmptyState(
+      icon: Icons.receipt_long_rounded,
+      title: 'No transactions yet',
+      message:
+          'Your financial history will appear here once you start tracking.',
     );
   }
 
   void _showTransactionDetails(BuildContext context, Expense expense) {
-    if (!mounted) return;
-
+    final theme = Theme.of(context);
     final isIncome = expense.type == TransactionType.income;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (modalContext) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
+      builder: (context) => DesignSystemCard(
+        glass: true,
+        padding: const EdgeInsets.all(AppDesignSystem.s24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle bar
             Center(
               child: Container(
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.3),
+                  color: theme.colorScheme.onSurface.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-
-            // Header
+            const VSpace.lg(),
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(AppDesignSystem.s16),
                   decoration: BoxDecoration(
-                    color: (isIncome ? Colors.green : Colors.red).withOpacity(
-                      0.1,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
+                    color:
+                        (isIncome
+                                ? AppDesignSystem.success
+                                : AppDesignSystem.error)
+                            .withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppDesignSystem.r16),
                   ),
                   child: Icon(
-                    isIncome ? Icons.trending_up : Icons.trending_down,
-                    color: isIncome ? Colors.green : Colors.red,
-                    size: 24,
+                    isIncome
+                        ? Icons.keyboard_double_arrow_down_rounded
+                        : Icons.keyboard_double_arrow_up_rounded,
+                    color: isIncome
+                        ? AppDesignSystem.success
+                        : AppDesignSystem.error,
                   ),
                 ),
-                const SizedBox(width: 16),
+                const HSpace.md(),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        expense.title,
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        expense.category,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withOpacity(0.7),
-                        ),
-                      ),
+                      Text(expense.title, style: theme.textTheme.headlineSmall),
+                      Text(expense.category, style: theme.textTheme.bodyMedium),
                     ],
                   ),
                 ),
-                Text(
-                  '${isIncome ? '+' : '-'}₹${expense.amount.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 20,
-                    color: isIncome ? Colors.green : Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
               ],
             ),
-            const SizedBox(height: 24),
-
-            // Details
+            const VSpace.xl(),
             _buildDetailRow(
-              'Transaction Type',
-              isIncome ? 'Income' : 'Expense',
+              context,
+              'Amount',
+              '₹${expense.amount.toStringAsFixed(2)}',
+              isIncome ? AppDesignSystem.success : AppDesignSystem.error,
             ),
-            _buildDetailRow('Amount', '₹${expense.amount.toStringAsFixed(2)}'),
-            _buildDetailRow('Category', expense.category),
             _buildDetailRow(
+              context,
               'Date',
               DateFormat('EEEE, MMM dd, yyyy').format(expense.date),
+              null,
             ),
-            _buildDetailRow('Time', DateFormat('hh:mm a').format(expense.date)),
+            _buildDetailRow(
+              context,
+              'Time',
+              DateFormat('hh:mm a').format(expense.date),
+              null,
+            ),
             if (expense.description.isNotEmpty)
-              _buildDetailRow('Description', expense.description),
-
-            const SizedBox(height: 24),
-
-            // Action buttons
+              _buildDetailRow(context, 'Note', expense.description, null),
+            const VSpace.xl(),
             Row(
               children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      Navigator.pop(modalContext);
-                      if (!mounted) return;
-
-                      await _showEditTransactionDialog(context, expense);
+                  child: SecondaryButton(
+                    text: 'Edit',
+                    onPressed: () {
+                      Navigator.pop(context);
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (context) => ExpenseDialog(
+                          expense: expense,
+                          onTransactionSaved: _load,
+                        ),
+                      );
                     },
-                    icon: const Icon(Icons.edit),
-                    label: const Text('Edit'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const HSpace.md(),
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: GradientButton(
+                    text: 'Delete',
+                    gradient: AppDesignSystem.errorGradient,
                     onPressed: () {
-                      Navigator.pop(modalContext);
-                      if (mounted) {
-                        _showDeleteConfirmation(context, expense);
-                      }
+                      Navigator.pop(context);
+                      _showDeleteConfirmation(context, expense);
                     },
-                    icon: const Icon(Icons.delete),
-                    label: const Text('Delete'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
                   ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 16),
+            const SizedBox(height: 120),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(
+    BuildContext context,
+    String label,
+    String value,
+    Color? valueColor,
+  ) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: AppDesignSystem.s16),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                fontWeight: FontWeight.w500,
-              ),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.5),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                color: Theme.of(context).colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+          Text(
+            value,
+            style: theme.textTheme.titleMedium?.copyWith(color: valueColor),
           ),
         ],
       ),
@@ -364,332 +418,17 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   void _showDeleteConfirmation(BuildContext context, Expense expense) {
-    if (!mounted) return;
-
-    showDialog(
+    showDesignSystemDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete Transaction'),
-        content: Text('Are you sure you want to delete "${expense.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              if (!mounted) return;
-
-              try {
-                await _firestore.deleteExpense(expense.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Transaction deleted successfully'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  _load(); // Refresh the list
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete transaction: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Delete Transaction',
+      message:
+          'Are you sure you want to delete "${expense.title}"? This action cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () async {
+        await _firestore.deleteExpense(expense.id);
+        _load();
+      },
     );
-  }
-
-  Future<void> _showEditTransactionDialog(
-    BuildContext context,
-    Expense expense,
-  ) async {
-    if (!mounted) return;
-
-    final titleController = TextEditingController(text: expense.title);
-    final amountController = TextEditingController(
-      text: expense.amount.toString(),
-    );
-    final descriptionController = TextEditingController(
-      text: expense.description,
-    );
-    String selectedCategory = expense.category;
-    TransactionType selectedType = expense.type;
-    DateTime selectedDate = expense.date;
-    bool isLoading = false;
-
-    final result = await showModalBottomSheet<Expense>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Handle bar
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Header
-              Text(
-                'Edit Transaction',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Form fields
-              TextField(
-                controller: titleController,
-                decoration: InputDecoration(
-                  labelText: 'Title',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: amountController,
-                decoration: InputDecoration(
-                  labelText: 'Amount',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-
-              DropdownButtonFormField<TransactionType>(
-                value: selectedType,
-                items: [
-                  DropdownMenuItem(
-                    value: TransactionType.income,
-                    child: Text('Income'),
-                  ),
-                  DropdownMenuItem(
-                    value: TransactionType.expense,
-                    child: Text('Expense'),
-                  ),
-                ],
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() => selectedType = val);
-                  }
-                },
-                decoration: InputDecoration(
-                  labelText: 'Type',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: descriptionController,
-                decoration: InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: TextEditingController(text: selectedCategory),
-                decoration: InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onChanged: (val) => selectedCategory = val,
-              ),
-              const SizedBox(height: 16),
-
-              // Date picker
-              InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: selectedDate,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                  );
-                  if (picked != null) {
-                    setState(() => selectedDate = picked);
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.3),
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.7),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Date: ${DateFormat('MMM dd, yyyy').format(selectedDate)}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : () async {
-                              if (titleController.text.trim().isEmpty ||
-                                  amountController.text.trim().isEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text(
-                                      'Please fill in all required fields',
-                                    ),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                                return;
-                              }
-
-                              setState(() => isLoading = true);
-
-                              try {
-                                final updatedExpense = Expense(
-                                  id: expense.id,
-                                  title: titleController.text.trim(),
-                                  amount: double.parse(
-                                    amountController.text.trim(),
-                                  ),
-                                  date: selectedDate,
-                                  category: selectedCategory.trim(),
-                                  description: descriptionController.text
-                                      .trim(),
-                                  type: selectedType,
-                                );
-
-                                await _firestore.updateExpense(updatedExpense);
-
-                                if (mounted) {
-                                  Navigator.pop(context, updatedExpense);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
-                                        'Transaction updated successfully',
-                                      ),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                setState(() => isLoading = false);
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Failed to update transaction: $e',
-                                      ),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: isLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Save Changes'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (result != null && mounted) {
-      _load(); // Refresh the list
-    }
   }
 }

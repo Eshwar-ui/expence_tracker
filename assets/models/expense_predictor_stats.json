@@ -1,0 +1,22 @@
+{
+  "sequence_length": 30,
+  "prediction_horizon": 30,
+  "num_features": 17,
+  "feature_stats": {
+    "mean": 0.0,
+    "std": 1.0,
+    "categories": [
+      "Food & Dining",
+      "Transportation",
+      "Shopping",
+      "Entertainment",
+      "Bills & Utilities",
+      "Healthcare",
+      "Education",
+      "Travel",
+      "Personal Care",
+      "Subscriptions"
+    ]
+  }
+}
+

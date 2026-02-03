@@ -75,6 +75,7 @@ class AnalyticsService {
         monthlyBreakdown: monthlyBreakdown,
         dailyBreakdown: dailyBreakdown,
         trends: trends,
+        recentExpenses: expenses,
         budgetStatus: budgetStatus,
       );
     } catch (e) {
