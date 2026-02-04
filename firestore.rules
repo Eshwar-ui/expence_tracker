@@ -20,7 +20,7 @@ service cloud.firestore {
     // ============================================================
     // USERS COLLECTION
     // ============================================================
-    // Users can only read/write their own user document
+    // Users can only read/write their own user document and all subcollections
     match /users/{userId} {
       allow read, write: if isOwner(userId);
       
@@ -28,14 +28,34 @@ service cloud.firestore {
       match /expenses/{expenseId} {
         allow read, write: if isOwner(userId);
       }
+      
+      // Budgets subcollection under users
+      match /budgets/{budgetId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Budget plans subcollection under users
+      match /budget_plans/{planId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Recurring transactions subcollection under users
+      match /recurring_transactions/{transactionId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // Categories subcollection under users
+      match /categories/{categoryId} {
+        allow read, write: if isOwner(userId);
+      }
     }
     
     // ============================================================
-    // BUDGETS COLLECTION
+    // LEGACY: ROOT-LEVEL COLLECTIONS (for backward compatibility)
     // ============================================================
-    // Users can only access their own budgets
-    // Note: For queries, Firestore checks each document returned
-    // The .where('userId', isEqualTo: _userId) filter ensures only user's docs are returned
+    // These can be removed once all data is migrated to subcollections
+    
+    // Budgets at root level (legacy)
     match /budgets/{budgetId} {
       allow read: if belongsToUser(resource.data);
       allow create: if belongsToUser(request.resource.data);
@@ -43,10 +63,7 @@ service cloud.firestore {
       allow delete: if belongsToUser(resource.data);
     }
     
-    // ============================================================
-    // BUDGET_PLANS COLLECTION
-    // ============================================================
-    // Users can only access their own budget plans
+    // Budget plans at root level (legacy)
     match /budget_plans/{planId} {
       allow read: if belongsToUser(resource.data);
       allow create: if belongsToUser(request.resource.data);
@@ -54,10 +71,7 @@ service cloud.firestore {
       allow delete: if belongsToUser(resource.data);
     }
     
-    // ============================================================
-    // RECURRING_TRANSACTIONS COLLECTION
-    // ============================================================
-    // Users can only access their own recurring transactions
+    // Recurring transactions at root level (legacy)
     match /recurring_transactions/{transactionId} {
       allow read: if belongsToUser(resource.data);
       allow create: if belongsToUser(request.resource.data);
@@ -65,35 +79,17 @@ service cloud.firestore {
       allow delete: if belongsToUser(resource.data);
     }
     
-    // ============================================================
-    // EXPENSES COLLECTION (Top-level - for backward compatibility)
-    // ============================================================
-    // Note: This is used by BudgetService.calculateSpentForCategory
-    // Users can only access expenses with their userId
+    // Expenses at root level (legacy)
     match /expenses/{expenseId} {
-      // Allow read if user owns the document
       allow read: if isAuthenticated() && 
         resource.data.userId == request.auth.uid;
-      
-      // Allow update if user owns the document
       allow update: if isAuthenticated() && 
         resource.data.userId == request.auth.uid &&
         request.resource.data.userId == request.auth.uid;
-      
-      // Allow delete if user owns the document
       allow delete: if isAuthenticated() && 
         resource.data.userId == request.auth.uid;
-      
-      // Allow create if userId matches authenticated user
       allow create: if isAuthenticated() && 
         request.resource.data.userId == request.auth.uid;
-    }
-    
-    // ============================================================
-    // DENY ALL OTHER ACCESS
-    // ============================================================
-    match /{document=**} {
-      allow read, write: if false;
     }
   }
 }

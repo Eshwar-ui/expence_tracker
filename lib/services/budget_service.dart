@@ -9,15 +9,27 @@ class BudgetService {
 
   String? get _userId => _auth.currentUser?.uid;
 
+  // Get budgets collection reference (under user)
+  CollectionReference get _budgetsCollection {
+    if (_userId == null) throw Exception('User not authenticated');
+    return _firestore.collection('users').doc(_userId).collection('budgets');
+  }
+
+  // Get budget_plans collection reference (under user)
+  CollectionReference get _budgetPlansCollection {
+    if (_userId == null) throw Exception('User not authenticated');
+    return _firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('budget_plans');
+  }
+
   // Create or update budget plan
   Future<void> saveBudgetPlan(BudgetPlan budgetPlan) async {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore
-          .collection('budget_plans')
-          .doc(budgetPlan.id)
-          .set(budgetPlan.toMap());
+      await _budgetPlansCollection.doc('plan').set(budgetPlan.toMap());
     } catch (e) {
       throw Exception('Failed to save budget plan: $e');
     }
@@ -28,15 +40,11 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      final doc = await _firestore
-          .collection('budget_plans')
-          .where('userId', isEqualTo: _userId)
-          .limit(1)
-          .get();
+      final doc = await _budgetPlansCollection.doc('plan').get();
 
-      if (doc.docs.isEmpty) return null;
+      if (!doc.exists) return null;
 
-      return BudgetPlan.fromMap(doc.docs.first.data());
+      return BudgetPlan.fromMap(doc.data() as Map<String, dynamic>);
     } catch (e) {
       throw Exception('Failed to get budget plan: $e');
     }
@@ -47,7 +55,7 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore.collection('budgets').doc(budget.id).set(budget.toMap());
+      await _budgetsCollection.doc(budget.id).set(budget.toMap());
     } catch (e) {
       throw Exception('Failed to create budget: $e');
     }
@@ -58,10 +66,7 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore
-          .collection('budgets')
-          .doc(budget.id)
-          .update(budget.toMap());
+      await _budgetsCollection.doc(budget.id).update(budget.toMap());
     } catch (e) {
       throw Exception('Failed to update budget: $e');
     }
@@ -72,7 +77,7 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore.collection('budgets').doc(budgetId).delete();
+      await _budgetsCollection.doc(budgetId).delete();
     } catch (e) {
       throw Exception('Failed to delete budget: $e');
     }
@@ -83,15 +88,11 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      final querySnapshot = await _firestore
-          .collection('budgets')
-          .where('userId', isEqualTo: _userId)
-          .where('isActive', isEqualTo: true)
-          .orderBy('category')
-          .get();
+      final querySnapshot = await _budgetsCollection.get();
 
       return querySnapshot.docs
-          .map((doc) => Budget.fromMap(doc.data()))
+          .map((doc) => Budget.fromMap(doc.data() as Map<String, dynamic>))
+          .where((budget) => budget.isActive)
           .toList();
     } catch (e) {
       throw Exception('Failed to get budgets: $e');
@@ -107,21 +108,29 @@ class BudgetService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      // Use the correct path: users/{userId}/expenses (subcollection)
       final querySnapshot = await _firestore
           .collection('users')
           .doc(_userId)
           .collection('expenses')
-          .where('category', isEqualTo: category)
-          .where('type', isEqualTo: TransactionType.expense.name)
-          .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-          .where('date', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
           .get();
 
       double totalSpent = 0.0;
       for (final doc in querySnapshot.docs) {
         final data = doc.data();
-        totalSpent += (data['amount'] ?? 0).toDouble();
+        final dateStr = data['date'] as String?;
+        if (dateStr == null) continue;
+
+        final date = DateTime.parse(dateStr);
+        final cat = data['category'] as String? ?? '';
+        final type = data['type'] as String? ?? 'expense';
+        final amount = (data['amount'] ?? 0).toDouble();
+
+        if (cat.toLowerCase() == category.toLowerCase() &&
+            type == 'expense' &&
+            !date.isBefore(startDate) &&
+            !date.isAfter(endDate)) {
+          totalSpent += amount;
+        }
       }
       return totalSpent;
     } catch (e) {
@@ -194,11 +203,11 @@ class BudgetService {
           .map((budget) => budget.category)
           .toList();
 
-      String budgetStatus = 'On Track';
+      String budgetStatusText = 'On Track';
       if (exceededBudgets.isNotEmpty) {
-        budgetStatus = 'Exceeded';
+        budgetStatusText = 'Exceeded';
       } else if (nearLimitBudgets.isNotEmpty) {
-        budgetStatus = 'Near Limit';
+        budgetStatusText = 'Near Limit';
       }
 
       return {
@@ -207,7 +216,7 @@ class BudgetService {
         'remaining': remaining,
         'monthlyIncome': budgetPlan?.monthlyIncome ?? 0.0,
         'savingsTarget': budgetPlan?.savingsTarget ?? 0.0,
-        'budgetStatus': budgetStatus,
+        'budgetStatus': budgetStatusText,
         'exceededBudgets': exceededBudgets,
         'nearLimitBudgets': nearLimitBudgets,
         'budgetCount': budgets.length,

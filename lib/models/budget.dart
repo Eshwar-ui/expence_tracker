@@ -99,6 +99,7 @@ class BudgetPlan {
   final String id;
   final String userId;
   final double monthlyIncome;
+  final double savingsTarget;
   final List<Budget> budgets;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -107,7 +108,8 @@ class BudgetPlan {
     required this.id,
     required this.userId,
     required this.monthlyIncome,
-    required this.budgets,
+    required this.savingsTarget,
+    this.budgets = const [],
     required this.createdAt,
     required this.updatedAt,
   });
@@ -116,13 +118,13 @@ class BudgetPlan {
       budgets.fold(0, (sum, budget) => sum + budget.limit);
   double get totalSpent => budgets.fold(0, (sum, budget) => sum + budget.spent);
   double get remainingIncome => monthlyIncome - totalSpent;
-  double get savingsTarget => monthlyIncome - totalBudgeted;
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'userId': userId,
       'monthlyIncome': monthlyIncome,
+      'savingsTarget': savingsTarget,
       'budgets': budgets.map((b) => b.toMap()).toList(),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
@@ -134,6 +136,7 @@ class BudgetPlan {
       id: map['id'] ?? '',
       userId: map['userId'] ?? '',
       monthlyIncome: (map['monthlyIncome'] ?? 0).toDouble(),
+      savingsTarget: (map['savingsTarget'] ?? 0).toDouble(),
       budgets:
           (map['budgets'] as List<dynamic>?)
               ?.map((b) => Budget.fromMap(b as Map<String, dynamic>))

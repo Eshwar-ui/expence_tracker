@@ -4,11 +4,13 @@ import 'package:expence_tracker/models/analytics.dart';
 import 'package:expence_tracker/screens/scan_screen.dart';
 import 'package:expence_tracker/screens/scan_upi_screen.dart';
 import 'package:expence_tracker/services/analytics_service.dart';
+import 'package:expence_tracker/services/recurring_transaction_service.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../utils/app_design_system.dart';
 import 'expense_dialog.dart';
+import 'ai_predictions_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -53,13 +55,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (!mounted) return;
     setState(() => _isLoading = true);
     try {
+      // Execute recurring transactions first (don't let it block data loading)
+      try {
+        await RecurringTransactionService().executeDueTransactions();
+      } catch (_) {
+        // Ignore recurring transaction errors - they shouldn't block data loading
+      }
+
       final now = DateTime.now();
       final start = DateTime(now.year, now.month, 1);
-      final end = DateTime(now.year, now.month + 1, 0);
+      final end = now;
+
       final data = await _analyticsService.getAnalyticsData(
         startDate: start,
         endDate: end,
       );
+
       if (!mounted) return;
       setState(() {
         _analyticsData = data;
@@ -323,8 +334,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             MaterialPageRoute(builder: (context) => const ScanUPIScreen()),
           );
         }),
-        _buildActionItem(Icons.insights_rounded, 'AI Advice', () {
-          // Navigator.push(context, MaterialPageRoute(builder: (context) => const AIPredictionsScreen()));
+        _buildActionItem(Icons.auto_awesome_rounded, 'AI Advice', () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const AIPredictionsScreen(),
+            ),
+          );
         }),
       ],
     );
@@ -360,7 +376,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text('Recent Activity', style: Theme.of(context).textTheme.titleLarge),
-        TextButton(onPressed: () {}, child: const Text('View All')),
+        TextButton(
+          onPressed: () => Navigator.pushNamed(context, '/transactions'),
+          child: const Text('View All'),
+        ),
       ],
     );
   }
@@ -373,7 +392,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     final expenses = _analyticsData?.recentExpenses ?? [];
-    if (expenses.isEmpty) {
+    final openingBalance = _analyticsData?.openingBalance ?? 0.0;
+
+    // Create a virtual transaction for opening balance if info exists
+    final showOpening = openingBalance != 0;
+
+    if (expenses.isEmpty && !showOpening) {
       return const SliverToBoxAdapter(
         child: DesignSystemEmptyState(
           icon: Icons.history_rounded,
@@ -383,11 +407,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
 
+    final displayItemsCount =
+        (expenses.length > 5 ? 5 : expenses.length) + (showOpening ? 1 : 0);
+
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate((context, index) {
-          final e = expenses[index];
+          if (showOpening && index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
+              child: PremiumTransactionTile(
+                title: 'Balance Carried Forward',
+                category: 'Carry Forward',
+                amount: openingBalance.abs(),
+                date: DateTime(DateTime.now().year, DateTime.now().month, 1),
+                isIncome: openingBalance >= 0,
+                onTap: () {},
+              ),
+            );
+          }
+
+          final expenseIndex = showOpening ? index - 1 : index;
+          final e = expenses[expenseIndex];
+
           return Padding(
             padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
             child: PremiumTransactionTile(
@@ -399,7 +442,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               onTap: () {},
             ),
           );
-        }, childCount: expenses.length > 5 ? 5 : expenses.length),
+        }, childCount: displayItemsCount),
       ),
     );
   }

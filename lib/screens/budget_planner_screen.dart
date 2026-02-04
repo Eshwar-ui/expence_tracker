@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/budget.dart';
 import '../services/budget_service.dart';
@@ -90,6 +89,8 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
           children: [
             _buildOverview(),
             const VSpace.xl(),
+            _buildFinancialPlanCard(),
+            const VSpace.xl(),
             _buildBudgetsList(),
             const SizedBox(height: 100),
           ],
@@ -121,7 +122,8 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
               DesignSystemBadge(
-                text: '${((spent / total) * 100).toStringAsFixed(0)}%',
+                text:
+                    '${total > 0 ? ((spent / total) * 100).toStringAsFixed(0) : 0}%',
                 color: spent > total
                     ? AppDesignSystem.error
                     : AppDesignSystem.success,
@@ -132,7 +134,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
             child: LinearProgressIndicator(
-              value: (spent / total).clamp(0, 1),
+              value: total > 0 ? (spent / total).clamp(0, 1) : 0,
               minHeight: 12,
               color: spent > total
                   ? AppDesignSystem.error
@@ -141,6 +143,87 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFinancialPlanCard() {
+    final income = _analytics['monthlyIncome'] ?? 0.0;
+    final target = _analytics['savingsTarget'] ?? 0.0;
+
+    return DesignSystemCard(
+      padding: const EdgeInsets.all(AppDesignSystem.s24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Monthly Plan',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              IconButton(
+                onPressed: _showEditPlanDialog,
+                icon: const Icon(Icons.edit_note_rounded),
+                color: AppDesignSystem.brandPrimary,
+              ),
+            ],
+          ),
+          const VSpace.md(),
+          Row(
+            children: [
+              Expanded(
+                child: _buildPlanStat(
+                  'Monthly Income',
+                  '₹${income.toStringAsFixed(0)}',
+                  Icons.payments_rounded,
+                ),
+              ),
+              const HSpace.md(),
+              Expanded(
+                child: _buildPlanStat(
+                  'Savings Target',
+                  '₹${target.toStringAsFixed(0)}',
+                  Icons.savings_rounded,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlanStat(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppDesignSystem.brandPrimary),
+          const VSpace.xs(),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+          Text(value, style: Theme.of(context).textTheme.titleMedium),
+        ],
+      ),
+    );
+  }
+
+  void _showEditPlanDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _BudgetPlanDialog(
+        budgetService: _budgetService,
+        onSaved: _loadBudgets,
+        currentIncome: (_analytics['monthlyIncome'] ?? 0.0).toDouble(),
+        currentTarget: (_analytics['savingsTarget'] ?? 0.0).toDouble(),
       ),
     );
   }
@@ -188,7 +271,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: (b.spent / b.limit).clamp(0, 1),
+                      value: b.limit > 0 ? (b.spent / b.limit).clamp(0, 1) : 0,
                       minHeight: 6,
                       color: b.spent > b.limit
                           ? AppDesignSystem.error
@@ -323,6 +406,101 @@ class _BudgetDialogState extends State<_BudgetDialog> {
         await widget.budgetService.createBudget(budget);
       else
         await widget.budgetService.updateBudget(budget);
+      widget.onSaved();
+      Navigator.pop(context);
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
+}
+
+class _BudgetPlanDialog extends StatefulWidget {
+  final BudgetService budgetService;
+  final VoidCallback onSaved;
+  final double currentIncome;
+  final double currentTarget;
+
+  const _BudgetPlanDialog({
+    required this.budgetService,
+    required this.onSaved,
+    required this.currentIncome,
+    required this.currentTarget,
+  });
+
+  @override
+  State<_BudgetPlanDialog> createState() => _BudgetPlanDialogState();
+}
+
+class _BudgetPlanDialogState extends State<_BudgetPlanDialog> {
+  late TextEditingController _incomeCtrl;
+  late TextEditingController _targetCtrl;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _incomeCtrl = TextEditingController(
+      text: widget.currentIncome.toStringAsFixed(0),
+    );
+    _targetCtrl = TextEditingController(
+      text: widget.currentTarget.toStringAsFixed(0),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DesignSystemCard(
+      glass: true,
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('Edit Monthly Plan', style: theme.textTheme.headlineSmall),
+          const VSpace.xl(),
+          DesignSystemTextField(
+            controller: _incomeCtrl,
+            label: 'Monthly Income',
+            hint: '0.00',
+            icon: Icons.payments_rounded,
+            keyboardType: TextInputType.number,
+          ),
+          const VSpace.lg(),
+          DesignSystemTextField(
+            controller: _targetCtrl,
+            label: 'Savings Target',
+            hint: '0.00',
+            icon: Icons.savings_rounded,
+            keyboardType: TextInputType.number,
+          ),
+          const VSpace.xl(),
+          GradientButton(
+            text: 'Save Plan',
+            isLoading: _loading,
+            onPressed: _save,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _save() async {
+    setState(() => _loading = true);
+    try {
+      final plan = BudgetPlan(
+        id: FirebaseAuth.instance.currentUser!.uid,
+        userId: FirebaseAuth.instance.currentUser!.uid,
+        monthlyIncome: double.tryParse(_incomeCtrl.text) ?? 0.0,
+        savingsTarget: double.tryParse(_targetCtrl.text) ?? 0.0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await widget.budgetService.saveBudgetPlan(plan);
       widget.onSaved();
       Navigator.pop(context);
     } finally {

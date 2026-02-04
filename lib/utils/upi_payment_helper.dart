@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../widgets/design_system_components.dart';
 
 /// UPI Payment Helper with comprehensive debugging and compatibility safeguards
 ///
@@ -269,11 +270,10 @@ class UPIPaymentHelper {
         debugPrint('❌ UPI URI VALIDATION FAILED');
         debugPrint('   URI: $upiString');
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid UPI payment link'),
-              backgroundColor: Colors.red,
-            ),
+          showDesignSystemSnackBar(
+            context: context,
+            message: 'Invalid UPI payment link',
+            isError: true,
           );
         }
         return false;
@@ -307,11 +307,10 @@ class UPIPaymentHelper {
         debugPrint('   - UPI app not responding');
         debugPrint('   - System error');
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No UPI app available. Please install a UPI app.'),
-              duration: Duration(seconds: 3),
-            ),
+          showDesignSystemSnackBar(
+            context: context,
+            message: 'No UPI app available. Please install a UPI app.',
+            isError: true,
           );
         }
       }
@@ -329,12 +328,10 @@ class UPIPaymentHelper {
       debugPrint('═══════════════════════════════════════════');
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to open UPI app: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+        showDesignSystemSnackBar(
+          context: context,
+          message: 'Failed to open UPI app: ${e.toString()}',
+          isError: true,
         );
       }
       return false;

@@ -5,7 +5,7 @@
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>
-		<string>Expence Tracker</string>
+		<string>Expense Tracker</string>
 		<key>CFBundleExecutable</key>
 		<string>$(EXECUTABLE_NAME)</string>
 		<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 		<key>CFBundleInfoDictionaryVersion</key>
 		<string>6.0</string>
 		<key>CFBundleName</key>
-		<string>expence_tracker</string>
+		<string>expense_tracker</string>
 		<key>CFBundlePackageType</key>
 		<string>APPL</string>
 		<key>CFBundleShortVersionString</key>
@@ -24,6 +24,18 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>NSFaceIDUsageDescription</key>
+		<string>Expense Tracker requires biometric authentication to secure your financial data.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Expense Tracker requires camera access to scan UPI QR codes for payments.</string>
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>upi</string>
+			<string>googlepays</string>
+			<string>phonepe</string>
+			<string>paytmmp</string>
+			<string>bhim</string>
+		</array>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>

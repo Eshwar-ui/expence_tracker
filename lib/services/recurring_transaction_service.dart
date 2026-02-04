@@ -11,6 +11,15 @@ class RecurringTransactionService {
 
   String? get _userId => _auth.currentUser?.uid;
 
+  // Get recurring transactions collection reference (under user)
+  CollectionReference get _recurringCollection {
+    if (_userId == null) throw Exception('User not authenticated');
+    return _firestore
+        .collection('users')
+        .doc(_userId)
+        .collection('recurring_transactions');
+  }
+
   // Create recurring transaction
   Future<void> createRecurringTransaction(
     RecurringTransaction transaction,
@@ -18,10 +27,7 @@ class RecurringTransactionService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore
-          .collection('recurring_transactions')
-          .doc(transaction.id)
-          .set(transaction.toMap());
+      await _recurringCollection.doc(transaction.id).set(transaction.toMap());
     } catch (e) {
       throw Exception('Failed to create recurring transaction: $e');
     }
@@ -34,8 +40,7 @@ class RecurringTransactionService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore
-          .collection('recurring_transactions')
+      await _recurringCollection
           .doc(transaction.id)
           .update(transaction.toMap());
     } catch (e) {
@@ -48,10 +53,7 @@ class RecurringTransactionService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      await _firestore
-          .collection('recurring_transactions')
-          .doc(transactionId)
-          .delete();
+      await _recurringCollection.doc(transactionId).delete();
     } catch (e) {
       throw Exception('Failed to delete recurring transaction: $e');
     }
@@ -62,15 +64,15 @@ class RecurringTransactionService {
     if (_userId == null) throw Exception('User not authenticated');
 
     try {
-      final querySnapshot = await _firestore
-          .collection('recurring_transactions')
-          .where('userId', isEqualTo: _userId)
-          .where('isActive', isEqualTo: true)
-          .orderBy('title')
-          .get();
+      final querySnapshot = await _recurringCollection.get();
 
       return querySnapshot.docs
-          .map((doc) => RecurringTransaction.fromMap(doc.data()))
+          .map(
+            (doc) => RecurringTransaction.fromMap(
+              doc.data() as Map<String, dynamic>,
+            ),
+          )
+          .where((t) => t.isActive)
           .toList();
     } catch (e) {
       throw Exception('Failed to get recurring transactions: $e');
@@ -94,8 +96,7 @@ class RecurringTransactionService {
             date: DateTime.now(),
             category: recurringTransaction.category,
             description: recurringTransaction.description,
-            type: TransactionType
-                .expense, // Most recurring transactions are expenses
+            type: TransactionType.expense,
           );
 
           // Add to expenses

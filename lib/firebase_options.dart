@@ -64,8 +64,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '392502074075',
     projectId: 'xpense-track-e2a4f',
     storageBucket: 'xpense-track-e2a4f.firebasestorage.app',
-    iosClientId: '392502074075-mednbj39rdhdlh274bii5291qcftqehg.apps.googleusercontent.com',
-    iosBundleId: 'com.example.expenceTracker',
+    iosClientId:
+        '392502074075-mednbj39rdhdlh274bii5291qcftqehg.apps.googleusercontent.com',
+    iosBundleId: 'com.eshwar.expensetracker',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -74,8 +75,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '392502074075',
     projectId: 'xpense-track-e2a4f',
     storageBucket: 'xpense-track-e2a4f.firebasestorage.app',
-    iosClientId: '392502074075-mednbj39rdhdlh274bii5291qcftqehg.apps.googleusercontent.com',
-    iosBundleId: 'com.example.expenceTracker',
+    iosClientId:
+        '392502074075-mednbj39rdhdlh274bii5291qcftqehg.apps.googleusercontent.com',
+    iosBundleId: 'com.eshwar.expensetracker',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -87,5 +89,4 @@ class DefaultFirebaseOptions {
     storageBucket: 'xpense-track-e2a4f.firebasestorage.app',
     measurementId: 'G-RE9GGCVW8F',
   );
-
 }

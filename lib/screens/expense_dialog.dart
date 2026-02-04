@@ -55,21 +55,34 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
     setState(() {
       _categories = cats;
       _categoriesLoading = false;
-
-      // Ensure selected category is valid for the current type
-      if (_selectedCategory == null ||
-          !_categories.any(
-            (c) =>
-                c.name == _selectedCategory &&
-                c.type.name == _selectedType.name,
-          )) {
-        final firstValid = _categories.firstWhere(
-          (c) => c.type.name == _selectedType.name,
-          orElse: () => _categories.first,
-        );
-        _selectedCategory = firstValid.name;
-      }
+      _ensureValidCategory();
     });
+  }
+
+  void _ensureValidCategory() {
+    if (_categories.isEmpty) return;
+
+    final isIncome = _selectedType == TransactionType.income;
+    final typeName = isIncome
+        ? model.CategoryType.income.name
+        : model.CategoryType.expense.name;
+
+    final filtered = _categories.where((c) => c.type.name == typeName).toList();
+
+    if (_selectedCategory == null ||
+        !filtered.any((c) => c.name == _selectedCategory)) {
+      if (filtered.isNotEmpty) {
+        _selectedCategory = filtered.first.name;
+      }
+    }
+  }
+
+  void _onTypeChanged(TransactionType type) {
+    setState(() {
+      _selectedType = type;
+      _ensureValidCategory();
+    });
+    _loadCategories(); // Refresh from service as well
   }
 
   void _initializeFields() {
@@ -95,8 +108,8 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
       _descriptionController.text = originalMessage;
       _selectedType =
           widget.smsTransaction!.transactionType.toLowerCase() == 'credit'
-          ? TransactionType.income
-          : TransactionType.expense;
+              ? TransactionType.income
+              : TransactionType.expense;
       _selectedDate = widget.smsTransaction!.date;
 
       // Auto-suggest category based on merchant
@@ -133,18 +146,24 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
 
   Future<void> _saveTransaction() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedCategory == null) return;
+    if (_selectedCategory == null) {
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Please select a category',
+        isError: true,
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
       final expense = Expense(
-        id:
-            widget.expense?.id ??
+        id: widget.expense?.id ??
             (DateTime.now().millisecondsSinceEpoch.toString() +
                 (widget.smsTransaction?.id ?? '')),
         title: _titleController.text.trim(),
-        amount: double.parse(_amountController.text),
+        amount: double.tryParse(_amountController.text) ?? 0.0,
         date: _selectedDate,
         category: _selectedCategory!,
         description: _descriptionController.text.trim(),
@@ -162,25 +181,18 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
       widget.onTransactionSaved();
       Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.expense != null
-                ? 'Transaction updated!'
-                : 'Transaction added!',
-          ),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: widget.expense != null
+            ? 'Transaction updated!'
+            : 'Transaction added!',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Error: $e',
+        isError: true,
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -260,9 +272,8 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final filteredCategories = _categories
-        .where((c) => c.type.name == _selectedType.name)
-        .toList();
+    final filteredCategories =
+        _categories.where((c) => c.type.name == _selectedType.name).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -362,12 +373,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       label: const Center(child: Text('Expense')),
                       selected: _selectedType == TransactionType.expense,
                       onSelected: (val) {
-                        if (val) {
-                          setState(() {
-                            _selectedType = TransactionType.expense;
-                            _loadCategories();
-                          });
-                        }
+                        if (val) _onTypeChanged(TransactionType.expense);
                       },
                       selectedColor: AppDesignSystem.error.withOpacity(0.2),
                     ),
@@ -378,12 +384,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       label: const Center(child: Text('Income')),
                       selected: _selectedType == TransactionType.income,
                       onSelected: (val) {
-                        if (val) {
-                          setState(() {
-                            _selectedType = TransactionType.income;
-                            _loadCategories();
-                          });
-                        }
+                        if (val) _onTypeChanged(TransactionType.income);
                       },
                       selectedColor: AppDesignSystem.success.withOpacity(0.2),
                     ),
@@ -397,6 +398,12 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                 label: 'Description / Title',
                 hint: 'What was this for?',
                 icon: Icons.description_rounded,
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter a title';
+                  }
+                  return null;
+                },
               ),
               const VSpace.md(),
               Row(
@@ -410,6 +417,18 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Enter amount';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Invalid number';
+                        }
+                        if (double.parse(value) <= 0) {
+                          return 'Must be > 0';
+                        }
+                        return null;
+                      },
                     ),
                   ),
                   const HSpace.md(),

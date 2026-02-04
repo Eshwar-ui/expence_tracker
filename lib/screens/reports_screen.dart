@@ -4,6 +4,7 @@ import 'package:expence_tracker/models/analytics.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -18,6 +19,11 @@ class _ReportsScreenState extends State<ReportsScreen>
   bool _loading = true;
   AnalyticsData? _data;
   late AnimationController _animationController;
+  DateTime _selectedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    1,
+  );
 
   @override
   void initState() {
@@ -39,16 +45,48 @@ class _ReportsScreenState extends State<ReportsScreen>
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      final data = await _analytics.getAnalyticsData();
+      final start = _selectedMonth;
+      final end = DateTime(
+        _selectedMonth.year,
+        _selectedMonth.month + 1,
+        0,
+        23,
+        59,
+        59,
+      );
+
+      final data = await _analytics.getAnalyticsData(
+        startDate: start,
+        endDate: end,
+      );
       if (!mounted) return;
       setState(() {
         _data = data;
         _loading = false;
       });
+      _animationController.reset();
       _animationController.forward();
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _selectMonth() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year, now.month + 1, 0),
+      initialDatePickerMode: DatePickerMode.year,
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedMonth = DateTime(picked.year, picked.month, 1);
+      });
+      _load();
     }
   }
 
@@ -58,7 +96,18 @@ class _ReportsScreenState extends State<ReportsScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Insights'),
+        title: GestureDetector(
+          onTap: _selectMonth,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(DateFormat('MMMM yyyy').format(_selectedMonth)),
+              const HSpace.xs(),
+              const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            ],
+          ),
+        ),
+        centerTitle: true,
         actions: [
           IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
         ],
@@ -87,6 +136,8 @@ class _ReportsScreenState extends State<ReportsScreen>
           _buildChartSection('Spending Trend', _buildTrendChart()),
           const VSpace.xl(),
           _buildChartSection('Category Breakdown', _buildCategoryChart()),
+          const VSpace.xl(),
+          _buildInsightsSection(),
           const VSpace.xl(),
           _buildBudgetInsight(),
           const SizedBox(height: 120),
@@ -149,19 +200,18 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildTrendChart() {
-    final spots = _data!.monthlyBreakdown.entries
-        .map((e) => FlSpot(double.parse(e.key.split('-')[1]), e.value))
-        .toList();
+    final sortedEntries = _data!.dailyBreakdown.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+
+    final spots = List.generate(sortedEntries.length, (i) {
+      return FlSpot(i.toDouble(), sortedEntries[i].value);
+    });
+
     if (spots.isEmpty) return const Center(child: Text('Insufficient data'));
 
     return LineChart(
       LineChartData(
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (v) =>
-              FlLine(color: Colors.white.withOpacity(0.1), strokeWidth: 1),
-        ),
+        gridData: const FlGridData(show: false),
         titlesData: const FlTitlesData(show: false),
         borderData: FlBorderData(show: false),
         lineBarsData: [
@@ -179,6 +229,88 @@ class _ReportsScreenState extends State<ReportsScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildInsightsSection() {
+    final insights = _data!.insights;
+    if (insights.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Financial Insights',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const VSpace.md(),
+        ...insights.map(
+          (insight) => Padding(
+            padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
+            child: DesignSystemCard(
+              padding: const EdgeInsets.all(AppDesignSystem.s16),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppDesignSystem.s12),
+                    decoration: BoxDecoration(
+                      color: _getInsightColor(insight.type).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppDesignSystem.r12),
+                    ),
+                    child: Icon(
+                      _getInsightIcon(insight.type),
+                      color: _getInsightColor(insight.type),
+                      size: 20,
+                    ),
+                  ),
+                  const HSpace.md(),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          insight.title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Text(
+                          insight.description,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getInsightColor(InsightType type) {
+    switch (type) {
+      case InsightType.warning:
+        return AppDesignSystem.error;
+      case InsightType.success:
+        return AppDesignSystem.success;
+      case InsightType.info:
+        return AppDesignSystem.brandInfo;
+      case InsightType.tip:
+        return AppDesignSystem.brandAccent;
+    }
+  }
+
+  IconData _getInsightIcon(InsightType type) {
+    switch (type) {
+      case InsightType.warning:
+        return Icons.warning_amber_rounded;
+      case InsightType.success:
+        return Icons.check_circle_outline_rounded;
+      case InsightType.info:
+        return Icons.info_outline_rounded;
+      case InsightType.tip:
+        return Icons.lightbulb_outline_rounded;
+    }
   }
 
   Widget _buildCategoryChart() {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_upi_india/flutter_upi_india.dart';
+import '../widgets/design_system_components.dart';
 
 /// UPI India Service for payment integration with app selection and status tracking
 ///
@@ -105,14 +106,11 @@ class UpiIndiaService {
       if (apps.isEmpty) {
         // No UPI apps installed
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
+          showDesignSystemSnackBar(
+            context: context,
+            message:
                 'No UPI apps found. Please install a UPI app like Google Pay, PhonePe, or Paytm.',
-              ),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
-            ),
+            isError: true,
           );
         }
         return null;
@@ -202,11 +200,10 @@ class UpiIndiaService {
     } catch (e) {
       debugPrint('❌ Error showing UPI app selector: $e');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading UPI apps: $e'),
-            backgroundColor: Colors.red,
-          ),
+        showDesignSystemSnackBar(
+          context: context,
+          message: 'Error loading UPI apps: $e',
+          isError: true,
         );
       }
       return null;
@@ -438,26 +435,19 @@ class UpiIndiaService {
     BuildContext context,
     UpiTransactionResponse response,
   ) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
+    showDesignSystemSnackBar(
+      context: context,
+      message:
           'Payment submitted. Status: ${response.responseCode ?? "Pending"}',
-        ),
-        backgroundColor: Colors.orange,
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
+      icon: Icons.info_outline_rounded,
     );
   }
 
   /// Shows info snackbar
   static void _showInfoSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
+    showDesignSystemSnackBar(
+      context: context,
+      message: message,
     );
   }
 

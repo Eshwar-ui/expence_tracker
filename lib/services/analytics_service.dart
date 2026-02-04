@@ -1,10 +1,10 @@
 import '../models/expence.dart';
 import '../models/analytics.dart';
 import 'firestore_service.dart';
+import 'budget_service.dart';
 
 class AnalyticsService {
-  // Note: we fetch expenses via FirestoreService to avoid Firestore date type
-  // constraints and then filter locally.
+  final FirestoreService _firestoreService = FirestoreService();
 
   // Get comprehensive analytics data
   Future<AnalyticsData> getAnalyticsData({
@@ -16,18 +16,32 @@ class AnalyticsService {
       final start = startDate ?? DateTime(now.year, now.month, 1);
       final end = endDate ?? now;
 
-      final expenses = await _getExpensesInRange(start, end);
+      // Fetch all expenses once
+      final allExpenses = await _firestoreService.getExpenses();
 
-      // Calculate totals
+      // Filter expenses in the date range (inclusive of both start and end dates)
+      final expenses = allExpenses.where((e) {
+        return !e.date.isBefore(start) && !e.date.isAfter(end);
+      }).toList();
+
+      // Calculate opening balance (all transactions before start date)
+      final openingBalance = allExpenses
+          .where((e) => e.date.isBefore(start))
+          .fold<double>(0.0, (sum, e) {
+            if (e.type == TransactionType.income) return sum + e.amount;
+            return sum - e.amount;
+          });
+
+      // Calculate totals for the range
       final totalIncome = expenses
           .where((e) => e.type == TransactionType.income)
-          .fold<double>(0.0, (sum, expense) => sum + expense.amount);
+          .fold<double>(0.0, (sum, e) => sum + e.amount);
 
       final totalExpenses = expenses
           .where((e) => e.type == TransactionType.expense)
-          .fold<double>(0.0, (sum, expense) => sum + expense.amount);
+          .fold<double>(0.0, (sum, e) => sum + e.amount);
 
-      final balance = totalIncome - totalExpenses;
+      final balance = openingBalance + totalIncome - totalExpenses;
 
       // Category breakdown
       final categoryBreakdown = <String, double>{};
@@ -50,22 +64,24 @@ class AnalyticsService {
       // Daily breakdown (last 30 days)
       final dailyBreakdown = <String, double>{};
       final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-      final recentExpenses = expenses.where(
-        (e) => e.date.isAfter(thirtyDaysAgo),
-      );
-
-      for (final expense in recentExpenses) {
-        final dayKey =
-            '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
-        dailyBreakdown[dayKey] =
-            (dailyBreakdown[dayKey] ?? 0.0) + expense.amount;
+      for (final expense in allExpenses) {
+        if (expense.date.isAfter(thirtyDaysAgo) &&
+            expense.type == TransactionType.expense) {
+          final dayKey =
+              '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
+          dailyBreakdown[dayKey] =
+              (dailyBreakdown[dayKey] ?? 0.0) + expense.amount;
+        }
       }
 
-      // Generate trends (last 7 days)
-      final trends = await _generateTrends(expenses);
+      // Generate trends
+      final trends = _generateTrends(allExpenses);
 
       // Budget status
       final budgetStatus = await _getBudgetStatus(expenses);
+
+      // Insights
+      final insights = _generateInsights(expenses, totalIncome, totalExpenses);
 
       return AnalyticsData(
         totalIncome: totalIncome,
@@ -77,46 +93,37 @@ class AnalyticsService {
         trends: trends,
         recentExpenses: expenses,
         budgetStatus: budgetStatus,
+        insights: insights,
+        openingBalance: openingBalance,
       );
     } catch (e) {
       throw Exception('Failed to get analytics data: $e');
     }
   }
 
-  // Get expenses in date range (robust against Firestore date type mismatches)
+  // Get expenses in date range
   Future<List<Expense>> _getExpensesInRange(
     DateTime start,
     DateTime end,
   ) async {
-    try {
-      // Read all user expenses via service and filter locally by date
-      final service = FirestoreService();
-      final all = await service.getExpenses();
-      return all
-          .where(
-            (e) =>
-                e.date.isAfter(start.subtract(const Duration(seconds: 1))) &&
-                e.date.isBefore(end.add(const Duration(seconds: 1))),
-          )
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to get expenses in range: $e');
-    }
+    final all = await _firestoreService.getExpenses();
+    return all.where((e) {
+      return !e.date.isBefore(start) && !e.date.isAfter(end);
+    }).toList();
   }
 
-  // Generate spending trends
-  Future<List<TransactionTrend>> _generateTrends(List<Expense> expenses) async {
+  // Generate spending trends for last 7 days
+  List<TransactionTrend> _generateTrends(List<Expense> allExpenses) {
     final trends = <TransactionTrend>[];
     final now = DateTime.now();
 
-    // Generate trends for last 7 days
     for (int i = 6; i >= 0; i--) {
       final date = now.subtract(Duration(days: i));
       final dayStart = DateTime(date.year, date.month, date.day);
       final dayEnd = dayStart.add(const Duration(days: 1));
 
-      final dayExpenses = expenses
-          .where((e) => e.date.isAfter(dayStart) && e.date.isBefore(dayEnd))
+      final dayExpenses = allExpenses
+          .where((e) => !e.date.isBefore(dayStart) && e.date.isBefore(dayEnd))
           .toList();
 
       final dayIncome = dayExpenses
@@ -142,47 +149,57 @@ class AnalyticsService {
 
   // Get budget status
   Future<BudgetStatus> _getBudgetStatus(List<Expense> expenses) async {
-    // Default budget categories for employees
-    final defaultBudgets = {
-      'Food': 8000.0,
-      'Transportation': 3000.0,
-      'Entertainment': 2000.0,
-      'Shopping': 5000.0,
-      'Bills': 4000.0,
-      'Healthcare': 2000.0,
-      'Education': 3000.0,
-      'Other': 1000.0,
-    };
+    try {
+      final budgetService = BudgetService();
+      final userBudgets = await budgetService.getBudgets();
 
-    final categories = <String, BudgetCategory>{};
-    double totalBudget = 0;
-    double totalSpent = 0;
+      final categories = <String, BudgetCategory>{};
+      double totalBudget = 0;
+      double totalSpent = 0;
 
-    for (final category in defaultBudgets.keys) {
-      final budget = defaultBudgets[category]!;
-      final spent = expenses
-          .where(
-            (e) => e.category == category && e.type == TransactionType.expense,
-          )
-          .fold<double>(0.0, (sum, e) => sum + e.amount);
+      if (userBudgets.isEmpty) {
+        return BudgetStatus(
+          categories: {},
+          totalBudget: 0,
+          totalSpent: 0,
+          remainingBudget: 0,
+        );
+      }
 
-      categories[category] = BudgetCategory(
-        category: category,
-        budget: budget,
-        spent: spent,
-        remaining: budget - spent,
+      for (final budget in userBudgets) {
+        final spent = expenses
+            .where(
+              (e) =>
+                  e.category.toLowerCase() == budget.category.toLowerCase() &&
+                  e.type == TransactionType.expense,
+            )
+            .fold<double>(0.0, (sum, e) => sum + e.amount);
+
+        categories[budget.category] = BudgetCategory(
+          category: budget.category,
+          budget: budget.limit,
+          spent: spent,
+          remaining: budget.limit - spent,
+        );
+
+        totalBudget += budget.limit;
+        totalSpent += spent;
+      }
+
+      return BudgetStatus(
+        categories: categories,
+        totalBudget: totalBudget,
+        totalSpent: totalSpent,
+        remainingBudget: totalBudget - totalSpent,
       );
-
-      totalBudget += budget;
-      totalSpent += spent;
+    } catch (e) {
+      return BudgetStatus(
+        categories: {},
+        totalBudget: 0,
+        totalSpent: 0,
+        remainingBudget: 0,
+      );
     }
-
-    return BudgetStatus(
-      categories: categories,
-      totalBudget: totalBudget,
-      totalSpent: totalSpent,
-      remainingBudget: totalBudget - totalSpent,
-    );
   }
 
   // Get monthly report
@@ -258,7 +275,7 @@ class AnalyticsService {
         SpendingInsight(
           title: 'Low Savings Rate',
           description:
-              'Your savings rate is ${savingsRate.toStringAsFixed(1)}%. Consider reducing expenses or increasing income.',
+              'Your savings rate is ${savingsRate.toStringAsFixed(1)}%. Consider reducing expenses.',
           type: InsightType.warning,
         ),
       );
@@ -300,7 +317,9 @@ class AnalyticsService {
 
     // Daily average insight
     final daysInMonth = DateTime.now().day;
-    final averageDailySpending = totalExpenses / daysInMonth;
+    final averageDailySpending = daysInMonth > 0
+        ? totalExpenses / daysInMonth
+        : 0.0;
     insights.add(
       SpendingInsight(
         title: 'Daily Average',

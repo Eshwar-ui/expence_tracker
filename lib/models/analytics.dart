@@ -10,6 +10,8 @@ class AnalyticsData {
   final List<TransactionTrend> trends;
   final List<Expense> recentExpenses;
   final BudgetStatus budgetStatus;
+  final List<SpendingInsight> insights;
+  final double openingBalance;
 
   AnalyticsData({
     required this.totalIncome,
@@ -21,6 +23,8 @@ class AnalyticsData {
     required this.trends,
     required this.recentExpenses,
     required this.budgetStatus,
+    required this.insights,
+    required this.openingBalance,
   });
 
   double get savingsPercentage {
@@ -44,6 +48,8 @@ class AnalyticsData {
       'trends': trends.map((t) => t.toJson()).toList(),
       'recentExpenses': recentExpenses.map((e) => e.toJson()).toList(),
       'budgetStatus': budgetStatus.toJson(),
+      'insights': insights.map((i) => i.toJson()).toList(),
+      'openingBalance': openingBalance,
     };
   }
 
@@ -62,6 +68,12 @@ class AnalyticsData {
           .map((e) => Expense.fromJson(e))
           .toList(),
       budgetStatus: BudgetStatus.fromJson(json['budgetStatus']),
+      insights:
+          (json['insights'] as List?)
+              ?.map((i) => SpendingInsight.fromJson(i))
+              .toList() ??
+          [],
+      openingBalance: (json['openingBalance'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }
@@ -190,6 +202,26 @@ class SpendingInsight {
     this.amount,
     this.category,
   });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'title': title,
+      'description': description,
+      'type': type.name,
+      'amount': amount,
+      'category': category,
+    };
+  }
+
+  factory SpendingInsight.fromJson(Map<String, dynamic> json) {
+    return SpendingInsight(
+      title: json['title'],
+      description: json['description'],
+      type: InsightType.values.firstWhere((e) => e.name == json['type']),
+      amount: (json['amount'] as num?)?.toDouble(),
+      category: json['category'],
+    );
+  }
 }
 
 enum InsightType { warning, info, success, tip }

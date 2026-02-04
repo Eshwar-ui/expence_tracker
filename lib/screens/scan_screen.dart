@@ -104,12 +104,10 @@ class _ScanScreenState extends State<ScanScreen> {
 
       // Show success message
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Found ${transactions.length} transactions'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
+        showDesignSystemSnackBar(
+          context: context,
+          message: 'Found ${transactions.length} transactions',
+          icon: Icons.sms_rounded,
         );
       }
     } catch (e) {
@@ -120,12 +118,10 @@ class _ScanScreenState extends State<ScanScreen> {
       });
 
       // Show error message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: AppDesignSystem.error,
-          duration: const Duration(seconds: 3),
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Error: $e',
+        isError: true,
       );
     }
   }
@@ -146,8 +142,7 @@ class _ScanScreenState extends State<ScanScreen> {
 
         try {
           final expense = Expense(
-            id:
-                DateTime.now().millisecondsSinceEpoch.toString() +
+            id: DateTime.now().millisecondsSinceEpoch.toString() +
                 transactionId,
             title: transaction.description,
             amount: transaction.amount,
@@ -175,21 +170,18 @@ class _ScanScreenState extends State<ScanScreen> {
         _isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Added $successCount transaction(s) successfully!'),
-          backgroundColor: AppDesignSystem.brandSecondary,
-          duration: const Duration(seconds: 2),
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Added $successCount transaction(s) successfully!',
+        icon: Icons.done_all_rounded,
       );
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: AppDesignSystem.error,
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Error: $e',
+        isError: true,
       );
     }
   }
@@ -263,8 +255,8 @@ class _ScanScreenState extends State<ScanScreen> {
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((t) {
         return t.description.toLowerCase().contains(
-              _searchQuery.toLowerCase(),
-            ) ||
+                  _searchQuery.toLowerCase(),
+                ) ||
             t.bankName.toLowerCase().contains(_searchQuery.toLowerCase());
       }).toList();
     }
@@ -275,13 +267,11 @@ class _ScanScreenState extends State<ScanScreen> {
     } else if (_filterType == 'credit') {
       filtered = filtered.where((t) => t.transactionType == 'credit').toList();
     } else if (_filterType == 'added') {
-      filtered = filtered
-          .where((t) => _addedTransactions.contains(t.id))
-          .toList();
+      filtered =
+          filtered.where((t) => _addedTransactions.contains(t.id)).toList();
     } else if (_filterType == 'not_added') {
-      filtered = filtered
-          .where((t) => !_addedTransactions.contains(t.id))
-          .toList();
+      filtered =
+          filtered.where((t) => !_addedTransactions.contains(t.id)).toList();
     }
 
     return filtered;
@@ -433,8 +423,11 @@ class _ScanScreenState extends State<ScanScreen> {
             Text(
               'Scanning your inbox...',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
+                  ),
             ),
           ],
         ),
@@ -709,9 +702,8 @@ class _ScanScreenState extends State<ScanScreen> {
                 isDebit
                     ? Icons.arrow_upward_rounded
                     : Icons.arrow_downward_rounded,
-                color: isDebit
-                    ? AppDesignSystem.error
-                    : AppDesignSystem.success,
+                color:
+                    isDebit ? AppDesignSystem.error : AppDesignSystem.success,
                 size: 20,
               ),
             ),
@@ -751,8 +743,8 @@ class _ScanScreenState extends State<ScanScreen> {
                     color: isAdded
                         ? theme.colorScheme.onSurface.withOpacity(0.3)
                         : (isDebit
-                              ? AppDesignSystem.error
-                              : AppDesignSystem.success),
+                            ? AppDesignSystem.error
+                            : AppDesignSystem.success),
                   ),
                 ),
                 if (isAdded)

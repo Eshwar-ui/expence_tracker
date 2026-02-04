@@ -5,6 +5,7 @@ import 'package:expence_tracker/utils/upi_payment_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter_upi_india/flutter_upi_india.dart';
+import '../widgets/design_system_components.dart';
 
 class ScanUPIScreen extends StatefulWidget {
   const ScanUPIScreen({Key? key}) : super(key: key);
@@ -59,12 +60,10 @@ class _ScanUPIScreenState extends State<ScanUPIScreen> {
       if (!UPIPaymentHelper.validateUpiUri(uri)) {
         final errorMsg = UPIPaymentHelper.getValidationErrorMessage(data);
         debugPrint('❌ UPI URI validation failed: $errorMsg');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMsg),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
+        showDesignSystemSnackBar(
+          context: context,
+          message: errorMsg,
+          isError: true,
         );
         // Reset state and restart scanner on validation failure
         setState(() {
@@ -127,18 +126,18 @@ class _ScanUPIScreenState extends State<ScanUPIScreen> {
       final amountDisplay = parsedAmount != null
           ? '₹${expenseAmount.toStringAsFixed(2)}'
           : '₹${expenseAmount.toStringAsFixed(2)} (amount not provided)';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Transaction saved for $sanitizedPayee ($amountDisplay)',
-          ),
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Transaction saved for $sanitizedPayee ($amountDisplay)',
+        icon: Icons.account_balance_wallet_rounded,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to save transaction: $e')));
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Failed to save transaction: $e',
+        isError: true,
+      );
     }
   }
 
@@ -163,7 +162,7 @@ class UPIPaymentConfirmationScreen extends StatefulWidget {
   final String upiUri;
 
   const UPIPaymentConfirmationScreen({Key? key, required this.upiUri})
-    : super(key: key);
+      : super(key: key);
 
   @override
   State<UPIPaymentConfirmationScreen> createState() =>
@@ -353,12 +352,10 @@ class _UPIPaymentConfirmationScreenState
       debugPrint('📚 Stack trace: $stackTrace');
       debugPrint('═══════════════════════════════════════════');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Payment error: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Payment error: ${e.toString()}',
+        isError: true,
       );
       setState(() => _isProcessing = false);
     }

@@ -125,15 +125,17 @@ class SecondaryButton extends StatelessWidget {
 class DesignSystemCard extends StatelessWidget {
   final Widget child;
   final EdgeInsets? padding;
+  final EdgeInsets? margin;
   final VoidCallback? onTap;
   final bool glass;
 
   const DesignSystemCard({
     super.key,
-    required this.child,
     this.padding,
+    this.margin,
     this.onTap,
     this.glass = false,
+    required this.child,
   });
 
   @override
@@ -143,11 +145,12 @@ class DesignSystemCard extends StatelessWidget {
 
     Widget card = Container(
       clipBehavior: Clip.antiAlias,
+      margin: margin,
       decoration: BoxDecoration(
         color: glass
             ? (isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : Colors.white.withOpacity(0.6))
+                ? Colors.white.withOpacity(0.05)
+                : Colors.white.withOpacity(0.6))
             : theme.cardTheme.color,
         borderRadius: BorderRadius.circular(AppDesignSystem.r24),
         border: Border.all(
@@ -304,8 +307,18 @@ class PremiumTransactionTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: theme.textTheme.titleMedium),
-                Text(category, style: theme.textTheme.bodySmall),
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  category,
+                  style: theme.textTheme.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
@@ -355,9 +368,9 @@ class DesignSystemBadge extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
@@ -370,6 +383,7 @@ class DesignSystemBadge extends StatelessWidget {
 class VSpace extends StatelessWidget {
   final double size;
   const VSpace(this.size, {super.key});
+  const VSpace.xs({super.key}) : size = 4.0;
   const VSpace.sm({super.key}) : size = AppDesignSystem.s8;
   const VSpace.md({super.key}) : size = AppDesignSystem.s16;
   const VSpace.lg({super.key}) : size = AppDesignSystem.s24;
@@ -381,6 +395,7 @@ class VSpace extends StatelessWidget {
 class HSpace extends StatelessWidget {
   final double size;
   const HSpace(this.size, {super.key});
+  const HSpace.xs({super.key}) : size = 4.0;
   const HSpace.sm({super.key}) : size = AppDesignSystem.s8;
   const HSpace.md({super.key}) : size = AppDesignSystem.s16;
   @override
@@ -455,6 +470,7 @@ class DesignSystemTextField extends StatelessWidget {
   final TextInputType keyboardType;
   final bool obscureText;
   final ValueChanged<String>? onChanged;
+  final String? Function(String?)? validator;
   final Widget? suffixIcon;
 
   const DesignSystemTextField({
@@ -466,6 +482,7 @@ class DesignSystemTextField extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.obscureText = false,
     this.onChanged,
+    this.validator,
     this.suffixIcon,
   });
 
@@ -504,11 +521,12 @@ class DesignSystemTextField extends StatelessWidget {
                     ),
                   ],
           ),
-          child: TextField(
+          child: TextFormField(
             controller: controller,
             keyboardType: keyboardType,
             obscureText: obscureText,
             onChanged: onChanged,
+            validator: validator,
             style: theme.textTheme.bodyLarge?.copyWith(
               fontWeight: FontWeight.w500,
             ),
@@ -526,6 +544,8 @@ class DesignSystemTextField extends StatelessWidget {
                 horizontal: 16,
                 vertical: 16,
               ),
+              errorStyle: const TextStyle(
+                  height: 0), // Hide default error text to keep clean look
             ),
           ),
         ),
@@ -563,18 +583,18 @@ Future<T?> showDesignSystemDialog<T>({
               Text(
                 title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
+                      fontWeight: FontWeight.w800,
+                    ),
                 textAlign: TextAlign.center,
               ),
               const VSpace.md(),
               Text(
                 message,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withOpacity(0.7),
-                ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
+                    ),
                 textAlign: TextAlign.center,
               ),
               const VSpace.xl(),
@@ -590,9 +610,8 @@ Future<T?> showDesignSystemDialog<T>({
                   Expanded(
                     child: GradientButton(
                       text: confirmLabel ?? 'Confirm',
-                      gradient: destructive
-                          ? AppDesignSystem.errorGradient
-                          : null,
+                      gradient:
+                          destructive ? AppDesignSystem.errorGradient : null,
                       onPressed: () {
                         Navigator.pop(context);
                         onConfirm();
@@ -607,6 +626,166 @@ Future<T?> showDesignSystemDialog<T>({
       ),
     ),
   );
+}
+
+// ============================================================================
+// SNACKBARS - MODERN & FLOATING
+// ============================================================================
+
+void showDesignSystemSnackBar({
+  required BuildContext context,
+  required String message,
+  bool isError = false,
+  IconData? icon,
+}) {
+  final theme = Theme.of(context);
+  final isDark = theme.brightness == Brightness.dark;
+
+  // Custom Top SnackBar using Overlay to avoid covering Nav Bar
+  final overlayState = Overlay.of(context);
+  late OverlayEntry overlayEntry;
+
+  overlayEntry = OverlayEntry(
+    builder: (context) {
+      return _TopSnackBar(
+        message: message,
+        isError: isError,
+        isDark: isDark,
+        icon: icon,
+        onDismissed: () {
+          overlayEntry.remove();
+        },
+      );
+    },
+  );
+
+  overlayState.insert(overlayEntry);
+}
+
+class _TopSnackBar extends StatefulWidget {
+  final String message;
+  final bool isError;
+  final bool isDark;
+  final IconData? icon;
+  final VoidCallback onDismissed;
+
+  const _TopSnackBar({
+    required this.message,
+    required this.isError,
+    required this.isDark,
+    this.icon,
+    required this.onDismissed,
+  });
+
+  @override
+  State<_TopSnackBar> createState() => _TopSnackBarState();
+}
+
+class _TopSnackBarState extends State<_TopSnackBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+  late Animation<double> _opacityAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0, -1.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut,
+    ));
+
+    _opacityAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    );
+
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted) {
+        _controller.reverse().then((_) {
+          widget.onDismissed();
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: SlideTransition(
+            position: _offsetAnimation,
+            child: FadeTransition(
+              opacity: _opacityAnimation,
+              child: Material(
+                color: Colors.transparent,
+                child: DesignSystemCard(
+                  glass: true,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: (widget.isError
+                                  ? AppDesignSystem.error
+                                  : AppDesignSystem.success)
+                              .withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          widget.icon ??
+                              (widget.isError
+                                  ? Icons.error_outline_rounded
+                                  : Icons.check_circle_outline_rounded),
+                          color: widget.isError
+                              ? AppDesignSystem.error
+                              : AppDesignSystem.success,
+                          size: 20,
+                        ),
+                      ),
+                      const HSpace.md(),
+                      Expanded(
+                        child: Text(
+                          widget.message,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: widget.isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // FOR COMPATIBILITY

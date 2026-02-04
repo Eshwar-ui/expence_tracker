@@ -44,11 +44,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load: $e'),
-          backgroundColor: AppDesignSystem.error,
-        ),
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Failed to load: $e',
+        isError: true,
       );
     }
   }
@@ -58,7 +57,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       _displayTransactions = _allTransactions.where((e) {
         final matchesSearch =
             e.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            e.category.toLowerCase().contains(_searchQuery.toLowerCase());
+                e.category.toLowerCase().contains(_searchQuery.toLowerCase());
 
         bool matchesType = true;
         if (_activeFilter == "Income") {
@@ -111,45 +110,45 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             child: _loading
                 ? const DesignSystemLoading()
                 : _displayTransactions.isEmpty
-                ? _empty()
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDesignSystem.s24,
-                    ),
-                    physics: const BouncingScrollPhysics(),
-                    itemCount: months.length,
-                    itemBuilder: (context, index) {
-                      final month = months[index];
-                      final monthItems = grouped[month]!;
+                    ? _empty()
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDesignSystem.s24,
+                        ),
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: months.length,
+                        itemBuilder: (context, index) {
+                          final month = months[index];
+                          final monthItems = grouped[month]!;
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildMonthHeader(theme, month),
-                          ...monthItems.map(
-                            (e) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppDesignSystem.s12,
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildMonthHeader(theme, month),
+                              ...monthItems.map(
+                                (e) => Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppDesignSystem.s12,
+                                  ),
+                                  child: PremiumTransactionTile(
+                                    title: e.title,
+                                    category: e.category,
+                                    amount: e.amount,
+                                    date: e.date,
+                                    isIncome: e.type == TransactionType.income,
+                                    onTap: () =>
+                                        _showTransactionDetails(context, e),
+                                  ),
+                                ),
                               ),
-                              child: PremiumTransactionTile(
-                                title: e.title,
-                                category: e.category,
-                                amount: e.amount,
-                                date: e.date,
-                                isIncome: e.type == TransactionType.income,
-                                onTap: () =>
-                                    _showTransactionDetails(context, e),
-                              ),
-                            ),
-                          ),
-                          if (index == months.length - 1)
-                            const VSpace(120)
-                          else
-                            const VSpace.lg(),
-                        ],
-                      );
-                    },
-                  ),
+                              if (index == months.length - 1)
+                                const VSpace(120)
+                              else
+                                const VSpace.lg(),
+                            ],
+                          );
+                        },
+                      ),
           ),
         ],
       ),
@@ -212,9 +211,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       color: isActive
                           ? theme.colorScheme.primary
                           : theme.colorScheme.onSurface,
-                      fontWeight: isActive
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                      fontWeight:
+                          isActive ? FontWeight.bold : FontWeight.normal,
                     ),
                     side: BorderSide(
                       color: isActive
@@ -301,11 +299,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 Container(
                   padding: const EdgeInsets.all(AppDesignSystem.s16),
                   decoration: BoxDecoration(
-                    color:
-                        (isIncome
-                                ? AppDesignSystem.success
-                                : AppDesignSystem.error)
-                            .withOpacity(0.1),
+                    color: (isIncome
+                            ? AppDesignSystem.success
+                            : AppDesignSystem.error)
+                        .withOpacity(0.1),
                     borderRadius: BorderRadius.circular(AppDesignSystem.r16),
                   ),
                   child: Icon(
