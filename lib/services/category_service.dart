@@ -16,103 +16,103 @@ class CategoryService {
 
   final List<Category> _defaultCategories = [
     // Expenses
-    Category(
+    Category.fromIconData(
       id: 'food',
       name: 'Food',
-      icon: Icons.restaurant_rounded,
+      iconData: Icons.restaurant_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'transport',
       name: 'Transportation',
-      icon: Icons.directions_bus_rounded,
+      iconData: Icons.directions_bus_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'entertainment',
       name: 'Entertainment',
-      icon: Icons.movie_rounded,
+      iconData: Icons.movie_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'shopping',
       name: 'Shopping',
-      icon: Icons.shopping_bag_rounded,
+      iconData: Icons.shopping_bag_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'bills',
       name: 'Bills',
-      icon: Icons.receipt_long_rounded,
+      iconData: Icons.receipt_long_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'healthcare',
       name: 'Healthcare',
-      icon: Icons.medical_services_rounded,
+      iconData: Icons.medical_services_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'education',
       name: 'Education',
-      icon: Icons.school_rounded,
+      iconData: Icons.school_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'other_exp',
       name: 'Other',
-      icon: Icons.more_horiz_rounded,
+      iconData: Icons.more_horiz_rounded,
       type: CategoryType.expense,
       isDefault: true,
     ),
 
     // Income
-    Category(
+    Category.fromIconData(
       id: 'salary',
       name: 'Salary',
-      icon: Icons.payments_rounded,
+      iconData: Icons.payments_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'freelance',
       name: 'Freelance',
-      icon: Icons.work_rounded,
+      iconData: Icons.work_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'investment',
       name: 'Investment',
-      icon: Icons.trending_up_rounded,
+      iconData: Icons.trending_up_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'bonus',
       name: 'Bonus',
-      icon: Icons.card_giftcard_rounded,
+      iconData: Icons.card_giftcard_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'refund',
       name: 'Refund',
-      icon: Icons.replay_rounded,
+      iconData: Icons.replay_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),
-    Category(
+    Category.fromIconData(
       id: 'other_inc',
       name: 'Other',
-      icon: Icons.more_horiz_rounded,
+      iconData: Icons.more_horiz_rounded,
       type: CategoryType.income,
       isDefault: true,
     ),

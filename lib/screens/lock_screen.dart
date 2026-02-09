@@ -45,45 +45,105 @@ class _LockScreenState extends State<LockScreen> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              AppDesignSystem.brandPrimary,
-              AppDesignSystem.brandPrimary.withBlue(255),
+              AppDesignSystem.brandPrimary.withOpacity(0.8),
+              AppDesignSystem.darkBg,
             ],
           ),
         ),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.lock_person_rounded,
-                size: 80,
-                color: Colors.white,
-              ),
-              const VSpace.lg(),
-              const Text(
-                'Access Locked',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+        child: Stack(
+          children: [
+            // Decorative background circles
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppDesignSystem.brandAccent.withOpacity(0.1),
                 ),
               ),
-              const VSpace.sm(),
-              const Text(
-                'Please authenticate to continue',
-                style: TextStyle(fontSize: 16, color: Colors.white70),
-              ),
-              const VSpace.xl(),
-              if (!_isAuthenticating)
-                PrimaryButton(
-                  text: 'Authenticate',
-                  onPressed: _authenticate,
-                  // Using a specific width or wrapping in a sized box if needed
+            ),
+            Positioned(
+              bottom: -50,
+              left: -50,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppDesignSystem.brandSecondary.withOpacity(0.1),
                 ),
-              if (_isAuthenticating)
-                const CircularProgressIndicator(color: Colors.white),
-            ],
-          ),
+              ),
+            ),
+
+            // Main Content
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.lock_outline,
+                    size: 40,
+                    color: Colors.white70,
+                  ),
+                  const VSpace.md(),
+                  const Text(
+                    'EXPENSE TRACKER',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      letterSpacing: 2,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 60),
+
+                  // Biometric Button
+                  GestureDetector(
+                    onTap: _authenticate,
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.2),
+                          width: 1,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                AppDesignSystem.brandPrimary.withOpacity(0.2),
+                            blurRadius: 20,
+                            spreadRadius: 5,
+                          ),
+                        ],
+                      ),
+                      child: _isAuthenticating
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Icon(
+                              Icons.fingerprint,
+                              size: 50,
+                              color: Colors.white,
+                            ),
+                    ),
+                  ),
+                  const VSpace.lg(),
+                  Text(
+                    _isAuthenticating ? 'Scanning...' : 'Tap into Finance',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

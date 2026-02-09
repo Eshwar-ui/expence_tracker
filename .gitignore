@@ -43,3 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables (contains API keys)
+.env
+
+# Keystore files (contains signing keys and passwords)
+*.jks
+*.keystore
+android/key.properties
+**/key.properties

@@ -615,8 +615,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const VSpace.md(),
                   _buildSwitchTile('Daily Reminders', 'Log your expenses daily',
                       daily, (v) => setDialogState(() => daily = v)),
-                  _buildSwitchTile('Smart Detection', 'Auto-detect from SMS',
-                      trans, (v) => setDialogState(() => trans = v)),
+                  _buildSwitchTile(
+                      'Smart SMS Detection',
+                      'Auto-detect from SMS',
+                      trans,
+                      (v) => setDialogState(() => trans = v)),
                   const VSpace.lg(),
                   GradientButton(
                       text: 'Save Changes',

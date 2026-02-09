@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:expence_tracker/models/expence.dart';
+import 'package:expence_tracker/models/category.dart';
 import 'package:expence_tracker/services/firestore_service.dart';
+import 'package:expence_tracker/services/category_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/screens/expense_dialog.dart';
@@ -15,18 +17,34 @@ class TransactionsScreen extends StatefulWidget {
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
   final FirestoreService _firestore = FirestoreService();
+  final CategoryService _categoryService = CategoryService();
   bool _loading = true;
   List<Expense> _allTransactions = [];
   List<Expense> _displayTransactions = [];
+  List<Category> _categories = [];
 
   String _searchQuery = "";
   String _activeFilter = "All"; // All, Income, Expense
+  String? _selectedCategory; // null means "All Categories"
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await _categoryService.getCategories();
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+      });
+    } catch (e) {
+      print('Failed to load categories: $e');
+    }
   }
 
   Future<void> _load() async {
@@ -66,7 +84,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           matchesType = e.type == TransactionType.expense;
         }
 
-        return matchesSearch && matchesType;
+        bool matchesCategory = true;
+        if (_selectedCategory != null) {
+          matchesCategory = e.category == _selectedCategory;
+        }
+
+        return matchesSearch && matchesType && matchesCategory;
       }).toList();
     });
   }
@@ -91,6 +114,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: PremiumAppBar(
         title: 'Transactions',
+        showBackButton: false,
         actions: [
           IconButton(
             onPressed: () => Navigator.pushNamed(context, '/scan'),
@@ -188,7 +212,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 : null,
           ),
           const VSpace.md(),
-          // Filter Chips
+          // Type Filter Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
@@ -224,6 +248,91 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
               }).toList(),
             ),
           ),
+          // Category Filter Chips
+          if (_categories.isNotEmpty) const VSpace.sm(),
+          if (_categories.isNotEmpty)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // "All Categories" chip
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: const Text('All Categories'),
+                      selected: _selectedCategory == null,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() => _selectedCategory = null);
+                          _applyFilters();
+                        }
+                      },
+                      backgroundColor: theme.colorScheme.surface,
+                      selectedColor:
+                          theme.colorScheme.secondary.withOpacity(0.2),
+                      labelStyle: TextStyle(
+                        color: _selectedCategory == null
+                            ? theme.colorScheme.secondary
+                            : theme.colorScheme.onSurface,
+                        fontWeight: _selectedCategory == null
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
+                      side: BorderSide(
+                        color: _selectedCategory == null
+                            ? theme.colorScheme.secondary
+                            : theme.colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                  // Category chips
+                  ..._categories.map((category) {
+                    final isActive = _selectedCategory == category.name;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              category.icon,
+                              size: 16,
+                              color: isActive
+                                  ? theme.colorScheme.secondary
+                                  : theme.colorScheme.onSurface,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(category.name),
+                          ],
+                        ),
+                        selected: isActive,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _selectedCategory = category.name);
+                            _applyFilters();
+                          }
+                        },
+                        backgroundColor: theme.colorScheme.surface,
+                        selectedColor:
+                            theme.colorScheme.secondary.withOpacity(0.2),
+                        labelStyle: TextStyle(
+                          color: isActive
+                              ? theme.colorScheme.secondary
+                              : theme.colorScheme.onSurface,
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        side: BorderSide(
+                          color: isActive
+                              ? theme.colorScheme.secondary
+                              : theme.colorScheme.outline.withOpacity(0.2),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
         ],
       ),
     );

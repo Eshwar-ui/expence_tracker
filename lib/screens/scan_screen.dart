@@ -4,6 +4,7 @@ import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/services/sms_service.dart';
 import 'package:expence_tracker/services/sms_tracking_service.dart';
 import 'package:expence_tracker/services/firestore_service.dart';
+
 import 'package:expence_tracker/screens/expense_dialog.dart';
 import 'package:intl/intl.dart';
 import '../utils/app_design_system.dart';
@@ -93,8 +94,11 @@ class _ScanScreenState extends State<ScanScreen> {
         _errorMessage = null;
       });
 
-      // Get all SMS messages (this will show progress)
+      // Get all SMS messages
+      print('🔍 Scanning SMS messages...');
       final transactions = await _smsService.getAllTransactions();
+      print('📨 Found ${transactions.length} SMS transactions');
+
       if (!mounted) return;
 
       setState(() {
@@ -497,14 +501,14 @@ class _ScanScreenState extends State<ScanScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_transactions.length} Transactions Detected',
+                    '${_transactions.length} Transactions Found',
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
                     ),
                   ),
                   Text(
-                    '${_addedTransactions.length} already in your records',
+                    '${_addedTransactions.length} already marked as added',
                     style: TextStyle(
                       color: Theme.of(
                         context,

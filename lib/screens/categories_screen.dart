@@ -225,10 +225,10 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         }
       }
 
-      final newCat = Category(
+      final newCat = Category.fromIconData(
         id: category?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
         name: newName,
-        icon: selectedIcon,
+        iconData: selectedIcon,
         type: selectedType,
         isDefault: category?.isDefault ?? false,
       );

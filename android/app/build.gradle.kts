@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -31,9 +34,30 @@ android {
         versionName = flutter.versionName
     }
 
+    // Load keystore properties
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                val props = Properties()
+                FileInputStream(keystorePropertiesFile).use { props.load(it) }
+                
+                keyAlias = props.getProperty("keyAlias")
+                keyPassword = props.getProperty("keyPassword")
+                storeFile = file(props.getProperty("storeFile"))
+                storePassword = props.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (keystorePropertiesFile.exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

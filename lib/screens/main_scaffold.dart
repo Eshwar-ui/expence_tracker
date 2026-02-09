@@ -15,6 +15,11 @@ class _MainScaffoldState extends State<MainScaffold>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
 
+  @override
+  void initState() {
+    super.initState();
+  }
+
   final List<Widget> _pages = const [
     HomeScreen(),
     TransactionsScreen(),
@@ -33,16 +38,15 @@ class _MainScaffoldState extends State<MainScaffold>
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
-              position:
-                  Tween<Offset>(
-                    begin: const Offset(0.1, 0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeOutCubic,
-                    ),
-                  ),
+              position: Tween<Offset>(
+                begin: const Offset(0.1, 0),
+                end: Offset.zero,
+              ).animate(
+                CurvedAnimation(
+                  parent: animation,
+                  curve: Curves.easeOutCubic,
+                ),
+              ),
               child: child,
             ),
           );
@@ -73,7 +77,6 @@ class _MainScaffoldState extends State<MainScaffold>
           color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
           width: 1,
         ),
-
         boxShadow: [
           BoxShadow(
             color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
@@ -253,9 +256,8 @@ class _ModernNavItemState extends State<_ModernNavItem>
                 duration: const Duration(milliseconds: 200),
                 style: TextStyle(
                   fontSize: 11,
-                  fontWeight: widget.isActive
-                      ? FontWeight.w700
-                      : FontWeight.w500,
+                  fontWeight:
+                      widget.isActive ? FontWeight.w700 : FontWeight.w500,
                   color: widget.isActive ? activeColor : inactiveColor,
                 ),
                 child: Text(

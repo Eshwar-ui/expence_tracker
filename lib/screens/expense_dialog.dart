@@ -9,7 +9,7 @@ import '../services/category_service.dart';
 import '../utils/app_design_system.dart';
 import '../widgets/design_system_components.dart';
 
-import '../utils/transaction_title_normalizer.dart';
+import '../utils/transaction_parser.dart';
 
 class ExpenseDialog extends StatefulWidget {
   final TransactionSMS? smsTransaction;
@@ -100,7 +100,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
       final originalMessage = widget.smsTransaction!.originalMessage;
 
       // Use the normalizer to create a clean, readable title
-      _titleController.text = TransactionTitleNormalizer.normalize(
+      _titleController.text = TransactionParser.normalizeDescription(
         rawDescription.isNotEmpty ? rawDescription : originalMessage,
       );
 
@@ -113,7 +113,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
       _selectedDate = widget.smsTransaction!.date;
 
       // Auto-suggest category based on merchant
-      final suggestedCategory = TransactionTitleNormalizer.suggestCategory(
+      final suggestedCategory = TransactionParser.suggestCategory(
         originalMessage,
       );
       if (suggestedCategory != null) {
@@ -250,10 +250,10 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
       ),
     ).then((value) async {
       if (value != null && value is String && value.isNotEmpty) {
-        final newCat = model.Category(
+        final newCat = model.Category.fromIconData(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           name: value,
-          icon: Icons.category_rounded,
+          iconData: Icons.category_rounded,
           type: _selectedType == TransactionType.income
               ? model.CategoryType.income
               : model.CategoryType.expense,

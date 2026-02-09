@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExpenseTracker | Future of Financial Intelligence</title>
+    <meta name="description" content="A premium, AI-driven expense tracking ecosystem designed for the modern user. Experience glassmorphism at its peak.">
+    
+    <link rel="stylesheet" href="style.css">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <!-- Premium Navigation -->
+    <nav class="nav-wrapper glass-shiny">
+        <div class="nav-content">
+            <div class="logo">
+                <div class="logo-symbol"></div>
+                <span>ExpenseTracker</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#features">Intelligence</a></li>
+                <li><a href="#design">Design System</a></li>
+                <li><a href="#docs">Documentation</a></li>
+            </ul>
+
+            <div style="display:flex; align-items:center; gap:20px;">
+                <button onclick="toggleTheme()" class="btn glass theme-toggle" style="padding:10px; border-radius:50%; width:44px; height:44px; display:flex; align-items:center; justify-content:center;">
+                    <i data-lucide="sun" id="theme-icon"></i>
+                </button>
+                <a href="#download" class="btn btn-primary" style="padding: 12px 28px; font-size: 0.9rem;">Get Started</a>
+            </div>
+
+        </div>
+    </nav>
+
+    <!-- Hero Section: The Immersive Entry -->
+    <section class="hero">
+        <div class="container hero-grid">
+            <div class="hero-content">
+                <!-- <div class="hero-badge">
+                    <i data-lucide="sparkles" size="16"></i>
+                    <span>Gemini AI Integrated</span>
+                </div> -->
+                <h1>Beyond Tracking.<br><span class="gradient-text">Financial Mastery.</span></h1>
+                <p class="hero-p">Experience a premium fintech ecosystem that combines advanced AI predictions with a sophisticated glassmorphic interface. Designed for those who demand more from their data.</p>
+                <div class="hero-cta">
+                    <a href="downloads/expence_tracker.apk" download="ExpenseTracker_App.apk" class="btn btn-primary">
+                        <i data-lucide="download-cloud"></i>
+                        Download Now
+                    </a>
+                    <a href="#features" class="btn btn-outline">Explore Evolution</a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="mockup-container">
+                    <div class="phone-shell">
+                        <div class="phone-screen">
+                            <!-- High-fidelity App Preview -->
+                            <div style="padding: 30px 20px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 40px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);"></div>
+                                    <i data-lucide="layout-grid" color="#6366F1"></i>
+                                </div>
+                                <div style="margin-bottom: 40px;">
+                                    <p style="font-size: 0.8rem; color: #64748B;">Net Worth Evolution</p>
+                                    <h3 style="font-size: 2.2rem; font-weight: 800; letter-spacing: -1px;">₹2,48,500</h3>
+                                </div>
+                                <!-- CSS Chart -->
+                                <div style="height: 120px; display: flex; align-items: flex-end; gap: 8px; margin-bottom: 40px;">
+                                    <div style="flex: 1; height: 40%; background: rgba(99, 102, 241, 0.2); border-radius: 4px;"></div>
+                                    <div style="flex: 1; height: 60%; background: rgba(99, 102, 241, 0.4); border-radius: 4px;"></div>
+                                    <div style="flex: 1; height: 90%; background: var(--brand-primary); border-radius: 4px;"></div>
+                                    <div style="flex: 1; height: 75%; background: rgba(99, 102, 241, 0.6); border-radius: 4px;"></div>
+                                    <div style="flex: 1; height: 100%; background: var(--primary-gradient); border-radius: 4px;"></div>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 16px;">
+                                    <div class="glass" style="padding: 16px; border-radius: 16px; display: flex; justify-content: space-between;">
+                                        <div style="display: flex; gap:12px;">
+                                            <div style="width:32px; height:32px; background:rgba(16,185,129,0.1); border-radius:8px;"></div>
+                                            <div>
+                                                <p style="font-size: 0.75rem; font-weight: 700;">Dividend Yield</p>
+                                                <p style="font-size: 0.6rem; color: #64748B;">Passive Income</p>
+                                            </div>
+                                        </div>
+                                        <span style="color: #10B981; font-weight: 700; font-size: 0.8rem;">+₹1,240</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Floating Tech Cards -->
+                    <div class="floating-elements">
+                        <div class="card-chart glass-shiny">
+                            <p style="font-size: 0.7rem; color: #94A3B8; margin-bottom: 8px;">AI Prediction</p>
+                            <h4 style="font-size: 1.1rem; color: #10B981;">₹92,400 Expected</h4>
+                            <p style="font-size: 0.6rem; margin-top: 4px;">Based on your last 30 days</p>
+                        </div>
+                        <div class="card-tx glass-shiny">
+                             <div style="display: flex; align-items: center; gap: 10px;">
+                                <i data-lucide="nfc" color="#6366F1" size="18"></i>
+                                <p style="font-size: 0.8rem; font-weight: 700;">UPI Scanning...</p>
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Deep Dive Features -->
+    <section id="features" class="feature-section">
+        <div class="container">
+            <div class="section-head">
+                <span class="tag">INTELLIGENCE LAYER</span>
+                <h2>Smarter by <span class="gradient-text">Design.</span></h2>
+                <p>We've integrated high-level engineering into a beautiful interface.</p>
+            </div>
+            
+            <div class="features-immersive">
+                <!-- AI Feature -->
+                <div class="immersive-item">
+                    <div class="item-visual glass">
+                        <div class="ai-glow"></div>
+                        <img src="ai-intelligence.png" alt="Gemini AI Intelligence" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
+                    </div>
+                    <div class="item-content">
+                        <h3>Gemini AI Predictions</h3>
+                        <p>Our intelligence engine analyzes your recurring patterns and macroeconomic trends to forecast your end-of-month balance with 94% accuracy. It's not just history; it's foresight.</p>
+                        <div class="feature-tags">
+                            <span class="tag">Predictive Analysis</span>
+                            <span class="tag">Anomaly Detection</span>
+                            <span class="tag">Auto-Categorization</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- UPI Feature -->
+                <div class="immersive-item">
+                    <div class="item-visual glass">
+                    <div class="item-visual glass">
+                        <img src="upi-ecosystem.png" alt="Contactless Ecosystem" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
+                    </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>Contactless Ecosystem</h3>
+                        <p>Seamlessly scan any UPI QR code. Our app doesn't just record the payment; it extracts merchant data, matches it with your existing history, and calculates the tax impact in real-time.</p>
+                        <div class="feature-tags">
+                            <span class="tag">Real-time Scanning</span>
+                            <span class="tag">Merchant Insights</span>
+                            <span class="tag">Digital Receipts</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SMS Feature -->
+                <div class="immersive-item">
+                    <div class="item-visual glass">
+                    <div class="item-visual glass">
+                        <img src="zero-input.png" alt="Zero-Input Tracking" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8; mix-blend-mode: screen;">
+                    </div>
+                    </div>
+                    <div class="item-content">
+                        <h3>Zero-Input Tracking</h3>
+                        <p>Stop manual entry. Our localized SMS service parses bank notifications securely on your device. Your data never leaves your phone, yet your ledger stays perfectly updated.</p>
+                        <div class="feature-tags">
+                            <span class="tag">Local Parsing</span>
+                            <span class="tag">Privacy First</span>
+                            <span class="tag">Auto-Sync</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- The Design System Section -->
+    <section id="design" class="ds-section">
+        <div class="container">
+            <div class="section-head">
+                <span class="tag">DESIGN LANGUAGE</span>
+                <h2>The <span class="gradient-text">Visual DNA</span></h2>
+                <p>Explore the tokens and components that define our premium experience.</p>
+            </div>
+
+            <div class="ds-explorer">
+                <div class="ds-nav glass">
+                    <div class="ds-nav-item active" onclick="showDS('colors')">Color System</div>
+                    <div class="ds-nav-item" onclick="showDS('type')">Typography</div>
+                    <div class="ds-nav-item" onclick="showDS('spacing')">Spacing & Radius</div>
+                    <div class="ds-nav-item" onclick="showDS('comps')">Components</div>
+                    <div class="ds-nav-item" onclick="showDS('docs')">Documentation</div>
+                </div>
+                
+                <!-- Color Panel - FULL SYSTEM -->
+                <div id="ds-colors" class="ds-panel glass-shiny">
+                    <h3 style="margin-bottom:32px;">Color System</h3>
+                    
+                    <span class="comp-label">Brand Colors</span>
+                    <div class="token-grid" style="margin-bottom:40px;">
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #6366F1;"></div>
+                            <div class="color-info">
+                                <span class="color-name">Electric Indigo</span>
+                                <span class="color-hex">#6366F1 · RGB(99, 102, 241)</span>
+                            </div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #10B981;"></div>
+                            <div class="color-info">
+                                <span class="color-name">Emerald Mint</span>
+                                <span class="color-hex">#10B981 · RGB(16, 185, 129)</span>
+                            </div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #F59E0B;"></div>
+                            <div class="color-info">
+                                <span class="color-name">Amber Sun</span>
+                                <span class="color-hex">#F59E0B · RGB(245, 158, 11)</span>
+                            </div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #3B82F6;"></div>
+                            <div class="color-info">
+                                <span class="color-name">Royal Blue</span>
+                                <span class="color-hex">#3B82F6 · RGB(59, 130, 246)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <span class="comp-label">Functional Colors</span>
+                    <div class="token-grid" style="margin-bottom:40px;">
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #10B981;"></div>
+                            <div class="color-info"><span class="color-name">Success</span><span class="color-hex">#10B981 · Income, Positive</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #EF4444;"></div>
+                            <div class="color-info"><span class="color-name">Error</span><span class="color-hex">#EF4444 · Expenses, Destructive</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #F59E0B;"></div>
+                            <div class="color-info"><span class="color-name">Warning</span><span class="color-hex">#F59E0B · Alerts, Cautions</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #3B82F6;"></div>
+                            <div class="color-info"><span class="color-name">Info</span><span class="color-hex">#3B82F6 · Informational</span></div>
+                        </div>
+                    </div>
+
+                    <span class="comp-label">Dark Theme Neutrals</span>
+                    <div class="token-grid" style="margin-bottom:40px;">
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #0F172A;"></div>
+                            <div class="color-info"><span class="color-name">darkBg</span><span class="color-hex">#0F172A · Slate 900</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #1E293B;"></div>
+                            <div class="color-info"><span class="color-name">darkCanvas</span><span class="color-hex">#1E293B · Slate 800</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #334155;"></div>
+                            <div class="color-info"><span class="color-name">darkSurface</span><span class="color-hex">#334155 · Slate 700</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #475569;"></div>
+                            <div class="color-info"><span class="color-name">darkBorder</span><span class="color-hex">#475569 · Slate 600</span></div>
+                        </div>
+                    </div>
+
+                    <span class="comp-label">Dark Text Hierarchy</span>
+                    <div class="token-grid">
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #F8FAFC;"></div>
+                            <div class="color-info"><span class="color-name">textHigh</span><span class="color-hex">#F8FAFC · Primary Text</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #CBD5E1;"></div>
+                            <div class="color-info"><span class="color-name">textMed</span><span class="color-hex">#CBD5E1 · Secondary Text</span></div>
+                        </div>
+                        <div class="color-token">
+                            <div class="color-preview" style="background: #64748B;"></div>
+                            <div class="color-info"><span class="color-name">textLow</span><span class="color-hex">#64748B · Tertiary Text</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Typography Panel - FULL SYSTEM -->
+                <div id="ds-type" class="ds-panel glass-shiny" style="display:none;">
+                    <h3 style="margin-bottom:32px;">Typography Scale</h3>
+                    
+                    <span class="comp-label">Display & Headlines (Outfit)</span>
+                    <div style="display:flex; flex-direction:column; gap:24px; margin-bottom:48px;">
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">displayLarge · 48px · 800 weight · -1.0 tracking</p>
+                            <span style="font-size:3rem; font-weight:800; letter-spacing:-1px;">₹2,48,500</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">displayMedium · 36px · 700 weight · -0.5 tracking</p>
+                            <span style="font-size:2.25rem; font-weight:700; letter-spacing:-0.5px;">Dashboard Overview</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">headlineLarge · 28px · 600 weight</p>
+                            <span style="font-size:1.75rem; font-weight:600;">Card Headers</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">headlineMedium · 24px · 600 weight</p>
+                            <span style="font-size:1.5rem; font-weight:600;">Section Titles</span>
+                        </div>
+                    </div>
+
+                    <span class="comp-label">Body & UI (Plus Jakarta Sans)</span>
+                    <div style="display:flex; flex-direction:column; gap:24px;">
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">titleLarge · 20px · 700 weight</p>
+                            <span style="font-size:1.25rem; font-weight:700;">Transaction Titles</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">titleMedium · 16px · 600 weight</p>
+                            <span style="font-size:1rem; font-weight:600;">Card Titles, Buttons</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">bodyLarge · 16px · 400 weight</p>
+                            <span style="font-size:1rem; font-weight:400; color:var(--text-med);">Primary body text for descriptions and content.</span>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <p style="font-size:0.7rem; color:var(--text-low); margin-bottom:8px;">labelLarge · 14px · 600 weight</p>
+                            <span style="font-size:0.875rem; font-weight:600;">INPUT LABELS</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Spacing & Radius Panel -->
+                <div id="ds-spacing" class="ds-panel glass-shiny" style="display:none;">
+                    <h3 style="margin-bottom:32px;">Spacing & Layout</h3>
+                    
+                    <span class="comp-label">Spacing Scale</span>
+                    <div class="token-grid" style="margin-bottom:48px;">
+                        <div class="glass" style="padding:4px 16px; font-size:0.85rem;"><code>s4</code> · 4px</div>
+                        <div class="glass" style="padding:8px 16px; font-size:0.85rem;"><code>s8</code> · 8px</div>
+                        <div class="glass" style="padding:12px 16px; font-size:0.85rem;"><code>s12</code> · 12px</div>
+                        <div class="glass" style="padding:16px 16px; font-size:0.85rem;"><code>s16</code> · 16px (Base)</div>
+                        <div class="glass" style="padding:20px 16px; font-size:0.85rem;"><code>s20</code> · 20px</div>
+                        <div class="glass" style="padding:24px 16px; font-size:0.85rem;"><code>s24</code> · 24px (Card Padding)</div>
+                        <div class="glass" style="padding:32px 16px; font-size:0.85rem;"><code>s32</code> · 32px</div>
+                        <div class="glass" style="padding:48px 16px; font-size:0.85rem;"><code>s48</code> · 48px</div>
+                    </div>
+
+                    <span class="comp-label">Border Radius</span>
+                    <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:48px;">
+                        <div class="glass" style="width:100px; height:100px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:0.8rem;"><code>r12</code></div>
+                        <div class="glass" style="width:100px; height:100px; border-radius:16px; display:flex; align-items:center; justify-content:center; font-size:0.8rem;"><code>r16</code></div>
+                        <div class="glass" style="width:100px; height:100px; border-radius:24px; display:flex; align-items:center; justify-content:center; font-size:0.8rem;"><code>r24</code></div>
+                        <div class="glass" style="width:100px; height:100px; border-radius:99px; display:flex; align-items:center; justify-content:center; font-size:0.8rem;"><code>rFull</code></div>
+                    </div>
+
+                    <span class="comp-label">Shadows (Soft Depth)</span>
+                    <div class="glass" style="padding:24px; border-radius:16px; box-shadow: 0 4px 10px rgba(0,0,0,0.04), 0 10px 20px rgba(0,0,0,0.04);">
+                        <code style="font-size:0.8rem; color:var(--text-med);">BoxShadow(blurRadius: 10, offset: Offset(0, 4))</code>
+                    </div>
+                </div>
+
+                <!-- Components Panel - FULL LIBRARY -->
+                <div id="ds-comps" class="ds-panel glass-shiny" style="display:none;">
+                    <h3 style="margin-bottom:32px;">Component Library</h3>
+                    
+                    <span class="comp-label">1. Buttons</span>
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:40px;">
+                        <button class="btn btn-primary">GradientButton</button>
+                        <button class="btn btn-outline">SecondaryButton</button>
+                        <button class="btn" style="background:var(--success-gradient); color:white;">SuccessButton</button>
+                        <button class="btn" style="background:var(--error-gradient); color:white;">ErrorButton</button>
+                    </div>
+
+                    <span class="comp-label">2. Cards</span>
+                    <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom:40px;">
+                        <div class="glass" style="padding:24px; border-radius:24px; flex:1; min-width:200px;">
+                            <p style="font-weight:700;">DesignSystemCard</p>
+                            <p style="font-size:0.8rem; color:var(--text-med);">Border Radius: 24px, Border: 1.5px</p>
+                        </div>
+                        <div class="glass-shiny" style="padding:24px; border-radius:24px; flex:1; min-width:200px;">
+                            <p style="font-weight:700;">Glass Card</p>
+                            <p style="font-size:0.8rem; color:var(--text-med);">Backdrop blur + semi-transparent</p>
+                        </div>
+                    </div>
+
+                    <span class="comp-label">3. Badges</span>
+                    <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:40px;">
+                        <span class="tag" style="background:rgba(16,185,129,0.1); color:#10B981; border-color:rgba(16,185,129,0.2);">Income</span>
+                        <span class="tag" style="background:rgba(239,68,68,0.1); color:#EF4444; border-color:rgba(239,68,68,0.2);">Expense</span>
+                        <span class="tag" style="background:rgba(245,158,11,0.1); color:#F59E0B; border-color:rgba(245,158,11,0.2);">Pending</span>
+                        <span class="tag" style="background:rgba(59,130,246,0.1); color:#3B82F6; border-color:rgba(59,130,246,0.2);">Info</span>
+                    </div>
+
+                    <span class="comp-label">4. Transaction Tile</span>
+                    <div class="glass" style="padding:16px; border-radius:16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:40px;">
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <div style="width:40px; height:40px; background:rgba(245,158,11,0.1); border-radius:12px; display:flex; align-items:center; justify-content:center;"><i data-lucide="shopping-cart" size="20" color="#F59E0B"></i></div>
+                            <div>
+                                <p style="font-weight:700; font-size:0.9rem;">Grocery Shopping</p>
+                                <p style="font-size:0.7rem; color:var(--text-low);">Food</p>
+                            </div>
+                        </div>
+                        <span style="color:#EF4444; font-weight:700;">-₹1,250</span>
+                    </div>
+
+                    <span class="comp-label">5. Empty State</span>
+                    <div class="glass" style="padding:48px; border-radius:24px; text-align:center;">
+                        <i data-lucide="receipt" size="64" color="#64748B" style="margin-bottom:16px;"></i>
+                        <h4>No transactions yet</h4>
+                        <p style="color:var(--text-low); font-size:0.9rem;">Your financial history will appear here</p>
+                    </div>
+                </div>
+
+                <!-- Docs Panel - EXPANDED -->
+                <div id="ds-docs" class="ds-panel glass-shiny" style="display:none;">
+                    <h3 style="margin-bottom:32px;">Developer Documentation</h3>
+                    
+                    <div style="display:flex; flex-direction:column; gap:24px;">
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <h4 style="color:var(--brand-primary); margin-bottom:12px;">Design Philosophy</h4>
+                            <ul style="font-size:0.9rem; color:var(--text-med); padding-left:20px; line-height:1.8;">
+                                <li><strong>Premium Fintech Aesthetic</strong> – Modern, trustworthy, and sophisticated</li>
+                                <li><strong>Glassmorphism</strong> – Frosted glass effects for depth and elegance</li>
+                                <li><strong>Dark Mode First</strong> – Optimized for both light and dark themes</li>
+                                <li><strong>Micro-interactions</strong> – Smooth animations for delightful UX</li>
+                                <li><strong>Accessibility</strong> – WCAG 2.1 AA compliant</li>
+                            </ul>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <h4 style="color:var(--brand-secondary); margin-bottom:12px;">Animation Durations</h4>
+                            <ul style="font-size:0.9rem; color:var(--text-med); padding-left:20px; line-height:1.8;">
+                                <li><code>Quick: 200ms</code> – Hover, focus states</li>
+                                <li><code>Standard: 300ms</code> – Page transitions, fades</li>
+                                <li><code>Slow: 500ms</code> – Complex animations, elastic</li>
+                            </ul>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <h4 style="color:var(--brand-accent); margin-bottom:12px;">Implementation</h4>
+                            <pre style="font-size:0.8rem; color:var(--text-med); overflow-x:auto;"><code>import 'package:expence_tracker/utils/app_design_system.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
+
+MaterialApp(
+  theme: AppDesignSystem.lightTheme,
+  darkTheme: AppDesignSystem.darkTheme,
+  themeMode: ThemeMode.system,
+)</code></pre>
+                        </div>
+                        <div class="glass" style="padding:24px; border-radius:16px;">
+                            <h4 style="color:var(--brand-info); margin-bottom:12px;">Spacing Helpers</h4>
+                            <pre style="font-size:0.8rem; color:var(--text-med); overflow-x:auto;"><code>// Vertical spacing
+VSpace.xs()  // 4px
+VSpace.sm()  // 8px
+VSpace.md()  // 16px
+VSpace.lg()  // 24px
+VSpace.xl()  // 32px
+
+// Horizontal spacing
+HSpace.xs()  // 4px
+HSpace.sm()  // 8px
+HSpace.md()  // 16px</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="feature-section">
+        <div class="container glass-shiny" style="padding: 100px; text-align: center; border-radius: var(--r-xl);">
+            <h2 style="font-size: 4rem; margin-bottom: 24px;">Start Your <span class="gradient-text">Evolution.</span></h2>
+            <p style="font-size: 1.4rem; color: var(--text-med); margin-bottom: 60px;">Join the elite tier of personal finance management.</p>
+            <div class="hero-cta" style="justify-content: center;">
+                 <a href="downloads/expence_tracker.apk" download="ExpenseTracker_App.apk" class="btn btn-primary">Download v1.2.0</a>
+                 <a href="#" class="btn btn-outline">Review Roadmap</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="container">
+            <div class="foot-grid">
+                <div class="foot-brand">
+                    <div class="logo">
+                        <div class="logo-symbol"></div>
+                        <span>ExpenseTracker</span>
+                    </div>
+                    <p>Building the foundation for autonomous personal finance through intelligent design and engineering.</p>
+                </div>
+                <div class="foot-links">
+                    <h4>Ecosystem</h4>
+                    <a href="#">Intelligence</a>
+                    <a href="#">Scanning</a>
+                    <a href="#">Predictive</a>
+                </div>
+                <div class="foot-links">
+                    <h4>Resources</h4>
+                    <a href="#">Security Docs</a>
+                    <a href="#">API Access</a>
+                    <a href="#">Privacy</a>
+                </div>
+                <div class="foot-links">
+                    <h4>Community</h4>
+                    <a href="#">GitHub</a>
+                    <a href="#">Discord</a>
+                    <a href="#">Twitter</a>
+                </div>
+            </div>
+            <div class="foot-bottom">
+                <div>
+                    <span>&copy; 2026 ExpenseTracker Ecosystem.</span>
+                    <p style="font-size: 0.75rem; margin-top: 4px; color: var(--text-low);">Crafted with passion by <span style="color: var(--brand-primary); font-weight: 700;">Eshwar</span></p>
+                </div>
+                <div style="display: flex; gap: 32px; align-items: center;">
+                    <a href="#" style="color: inherit; text-decoration: none;">Terms of Service</a>
+                    <a href="#" style="color: inherit; text-decoration: none;">Privacy Protocol</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        lucide.createIcons();
+
+        // Theme Management
+        function initTheme() {
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            document.body.setAttribute('data-theme', savedTheme);
+            updateThemeIcon(savedTheme);
+        }
+
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon');
+            if (icon) {
+                icon.setAttribute('data-lucide', theme === 'light' ? 'moon' : 'sun');
+                lucide.createIcons();
+            }
+        }
+
+        // Initialize theme on load
+        initTheme();
+
+        function showDS(target) {
+            const panels = ['colors', 'type', 'spacing', 'comps', 'docs'];
+            panels.forEach(p => {
+                document.getElementById('ds-' + p).style.display = 'none';
+            });
+            
+            document.getElementById('ds-' + target).style.display = 'block';
+            
+            const items = document.querySelectorAll('.ds-nav-item');
+            items.forEach(i => i.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            // Re-render icons for the newly shown panel
+            lucide.createIcons();
+        }
+    </script>
+</body>
+</html>
