@@ -6,20 +6,36 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Initialize Firebase Admin
-if (process.env.SERVICE_ACCOUNT_JSON) {
-  const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  console.log('Firebase Admin initialized using SERVICE_ACCOUNT_JSON env variable.');
-} else {
-  // Fallback to GOOGLE_APPLICATION_CREDENTIALS file path
-  admin.initializeApp({
+const fs = require('fs');
+const path = require('path');
+
+// Initialize Firebase Admin with better local development fallbacks
+function initializeFirebase() {
+  // Option 1: Env variable with full JSON content (Koyeb/Render)
+  if (process.env.SERVICE_ACCOUNT_JSON) {
+    console.log('Initializing Firebase: Using SERVICE_ACCOUNT_JSON env variable.');
+    return admin.initializeApp({
+      credential: admin.credential.cert(JSON.parse(process.env.SERVICE_ACCOUNT_JSON)),
+    });
+  }
+
+  // Option 2: Local file check (Local development)
+  const localKeyPath = path.join(__dirname, 'serviceAccountKey.json');
+  if (fs.existsSync(localKeyPath)) {
+    console.log('Initializing Firebase: Using local serviceAccountKey.json file.');
+    return admin.initializeApp({
+      credential: admin.credential.cert(localKeyPath),
+    });
+  }
+
+  // Option 3: Fallback to standard Google Environment Variable (GOOGLE_APPLICATION_CREDENTIALS)
+  console.log('Initializing Firebase: Falling back to applicationDefault (GOOGLE_APPLICATION_CREDENTIALS).');
+  return admin.initializeApp({
     credential: admin.credential.applicationDefault(),
   });
-  console.log('Firebase Admin initialized using applicationDefault (GOOGLE_APPLICATION_CREDENTIALS).');
 }
+
+initializeFirebase();
 
 const db = admin.firestore();
 
