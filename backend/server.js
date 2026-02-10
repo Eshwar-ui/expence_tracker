@@ -7,11 +7,19 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Initialize Firebase Admin
-// You will need to provide serviceAccountKey.json for this to work
-// and set GOOGLE_APPLICATION_CREDENTIALS path or use the JSON directly
-admin.initializeApp({
-  credential: admin.credential.applicationDefault(), // Or admin.credential.cert(serviceAccount)
-});
+if (process.env.SERVICE_ACCOUNT_JSON) {
+  const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  console.log('Firebase Admin initialized using SERVICE_ACCOUNT_JSON env variable.');
+} else {
+  // Fallback to GOOGLE_APPLICATION_CREDENTIALS file path
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+  });
+  console.log('Firebase Admin initialized using applicationDefault (GOOGLE_APPLICATION_CREDENTIALS).');
+}
 
 const db = admin.firestore();
 
