@@ -1,0 +1,157 @@
+const express = require('express');
+const admin = require('firebase-admin');
+const cron = require('node-cron');
+require('dotenv').config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Initialize Firebase Admin
+// You will need to provide serviceAccountKey.json for this to work
+// and set GOOGLE_APPLICATION_CREDENTIALS path or use the JSON directly
+admin.initializeApp({
+  credential: admin.credential.applicationDefault(), // Or admin.credential.cert(serviceAccount)
+});
+
+const db = admin.firestore();
+
+// Unique daily reminder messages
+const reminderMessages = [
+  "Time to log those morning coffees and commute costs! ☕️🚗",
+  "Keeping track of your spending is the first step to financial freedom! 💸✨",
+  "Did you add today's expenses yet? Your future self will thank you! 📝📈",
+  "Small expenses add up! Don't forget to record today's transactions. 🧾🔍",
+  "Goal check: Are you staying within your budget today? 🎯💰",
+  "Daily check-in: Log your income and expenses to keep your dashboard accurate! 📊🚀",
+];
+
+// 1. Scheduled Daily Reminders (Runs every hour)
+cron.schedule('0 * * * *', async () => {
+  const now = new Date();
+  const currentHour = now.getHours().toString().padStart(2, '0') + ':00';
+  
+  console.log(`[${new Date().toISOString()}] Checking for users with reminder preference: ${currentHour}`);
+
+  try {
+    const usersSnapshot = await db.collection('users')
+      .where('preferredNotificationTime', '==', currentHour)
+      .get();
+    
+    if (usersSnapshot.empty) {
+      console.log('No users to remind this hour.');
+      return;
+    }
+
+    const promises = [];
+    usersSnapshot.forEach(userDoc => {
+      const userId = userDoc.id;
+      const message = reminderMessages[Math.floor(Math.random() * reminderMessages.length)];
+      
+      const tokenPromise = db.collection('users').doc(userId).collection('fcm_tokens').get()
+        .then(async (tokenSnapshot) => {
+          const tokens = [];
+          tokenSnapshot.forEach(doc => tokens.push(doc.data().token));
+
+          if (tokens.length > 0) {
+            const payload = {
+              notification: {
+                title: "Daily Expense Reminder",
+                body: message,
+              },
+              data: {
+                click_action: "FLUTTER_NOTIFICATION_CLICK",
+                screen: "/transactions",
+              },
+            };
+            return admin.messaging().sendToDevice(tokens, payload);
+          }
+        });
+      promises.push(tokenPromise);
+    });
+
+    await Promise.all(promises);
+    console.log(`Sent reminders to ${promises.length} users.`);
+  } catch (error) {
+    console.error('Error sending daily reminders:', error);
+  }
+});
+
+// 2. Budget Alerts (Real-time listener)
+// Note: This listens for changes in ALL user expenses
+// For a very large user base, move this logic to the client app (Flutter)
+db.collectionGroup('expenses').onSnapshot(snapshot => {
+  snapshot.docChanges().forEach(async (change) => {
+    if (change.type === 'added') {
+      const expenseData = change.doc.data();
+      const expenseRef = change.doc.ref;
+      const userId = expenseRef.parent.parent.id; // Get userId from the parent document path
+      const category = expenseData.category;
+      const amount = expenseData.amount;
+
+      if (!category || !userId) return;
+
+      try {
+        const budgetSnapshot = await db.collection('users').doc(userId).collection('budgets')
+          .where('category', '==', category)
+          .where('isActive', '==', true)
+          .limit(1)
+          .get();
+
+        if (budgetSnapshot.empty) return;
+
+        const budgetDoc = budgetSnapshot.docs[0];
+        const budgetData = budgetDoc.data();
+        const limit = budgetData.limit;
+        const spent = (budgetData.spent || 0) + amount;
+
+        // Update spent amount in Firestore
+        await budgetDoc.ref.update({
+          spent: spent,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Send notification if alert threshold reached
+        let title = "";
+        let body = "";
+
+        if (spent >= limit) {
+          title = "Budget Exhausted! ⚠️";
+          body = `You've exceeded your budget for ${category}. Total spent: ${spent.toFixed(2)} / ${limit.toFixed(2)}`;
+        } else if (spent >= limit * 0.9) {
+          title = "Budget Alert! 🔔";
+          body = `You've reached 90% of your budget for ${category}. Staying within limits?`;
+        }
+
+        if (title && body) {
+          const tokenSnapshot = await db.collection('users').doc(userId).collection('fcm_tokens').get();
+          const tokens = [];
+          tokenSnapshot.forEach(doc => tokens.push(doc.data().token));
+
+          if (tokens.length > 0) {
+            const payload = {
+              notification: { title, body },
+              data: {
+                click_action: "FLUTTER_NOTIFICATION_CLICK",
+                screen: "/budget",
+              },
+            };
+            await admin.messaging().sendToDevice(tokens, payload);
+            console.log(`[ALERT] Notified user ${userId} for category ${category}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error handling budget alert:', error);
+      }
+    }
+  });
+}, error => {
+  console.error('Firestore listener error:', error);
+});
+
+app.get('/', (req, res) => {
+  res.send('Expense Tracker Notification Server is Running 🚀');
+});
+
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});

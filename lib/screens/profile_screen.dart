@@ -600,35 +600,100 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Dialog(
-            backgroundColor: Colors.transparent,
-            child: DesignSystemCard(
-              glass: true,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Preferences',
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const VSpace.md(),
-                  _buildSwitchTile('Daily Reminders', 'Log your expenses daily',
-                      daily, (v) => setDialogState(() => daily = v)),
-                  _buildSwitchTile(
-                      'Smart SMS Detection',
-                      'Auto-detect from SMS',
-                      trans,
-                      (v) => setDialogState(() => trans = v)),
-                  const VSpace.lg(),
-                  GradientButton(
-                      text: 'Save Changes',
-                      onPressed: () => Navigator.pop(context)),
-                ],
+      builder: (context) => FutureBuilder<AppUser?>(
+        future: _userFuture,
+        builder: (context, userSnapshot) {
+          final appUser = userSnapshot.data;
+          String selectedTime = appUser?.preferredNotificationTime ?? '20:00';
+
+          return StatefulBuilder(
+            builder: (context, setDialogState) => BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Dialog(
+                backgroundColor: Colors.transparent,
+                child: DesignSystemCard(
+                  glass: true,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Preferences',
+                          style: Theme.of(context).textTheme.titleLarge),
+                      const VSpace.md(),
+                      _buildSwitchTile(
+                          'Daily Reminders',
+                          'Log your expenses daily',
+                          daily,
+                          (v) => setDialogState(() => daily = v)),
+                      if (daily) ...[
+                        const VSpace.sm(),
+                        ListTile(
+                          title: const Text('Reminder Time',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Currently set to $selectedTime'),
+                          trailing: Icon(Icons.access_time_rounded,
+                              color: Theme.of(context).colorScheme.primary),
+                          onTap: () async {
+                            final parts = selectedTime.split(':');
+                            final initialTime = TimeOfDay(
+                              hour: int.parse(parts[0]),
+                              minute: int.parse(parts[1]),
+                            );
+
+                            final TimeOfDay? picked = await showTimePicker(
+                              context: context,
+                              initialTime: initialTime,
+                            );
+
+                            if (picked != null) {
+                              // We currently support hourly reminders to save resources
+                              final formattedTime =
+                                  '${picked.hour.toString().padLeft(2, '0')}:00';
+                              setDialogState(
+                                  () => selectedTime = formattedTime);
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ],
+                      _buildSwitchTile(
+                          'Smart SMS Detection',
+                          'Auto-detect from SMS',
+                          trans,
+                          (v) => setDialogState(() => trans = v)),
+                      const VSpace.lg(),
+                      GradientButton(
+                        text: 'Save Changes',
+                        onPressed: () async {
+                          try {
+                            await _authService
+                                .updateNotificationTime(selectedTime);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              _loadUserData(); // Refresh local user data
+                              setState(() {});
+                              showDesignSystemSnackBar(
+                                context: context,
+                                message: 'Preferences updated!',
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              showDesignSystemSnackBar(
+                                context: context,
+                                message: 'Failed to save: $e',
+                                isError: true,
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

@@ -15,10 +15,19 @@ import 'package:expence_tracker/screens/categories_screen.dart';
 import 'package:expence_tracker/firebase_options.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:expence_tracker/services/notification_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+
+// Background message handler
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint("Handling a background message: ${message.messageId}");
+}
 
 void main() async {
   runZonedGuarded(() async {
@@ -30,6 +39,10 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Initialize notification service
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await NotificationService().initialize();
 
     // Pass all uncaught "asynchronous" errors to FlutterError.onError.
     FlutterError.onError = (FlutterErrorDetails details) {

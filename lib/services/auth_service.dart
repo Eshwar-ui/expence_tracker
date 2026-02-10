@@ -1,3 +1,4 @@
+import 'package:expence_tracker/services/notification_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -73,6 +74,7 @@ class AuthService {
       // Store user details in Firestore
       if (userCredential.user != null) {
         await _storeUserInFirestore(userCredential.user!);
+        await NotificationService().registerToken();
       }
 
       return userCredential;
@@ -137,6 +139,9 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     try {
+      // Unregister FCM token before signing out
+      await NotificationService().unregisterToken();
+
       await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
     } catch (e) {
       throw Exception('Sign out failed: $e');
@@ -172,6 +177,20 @@ class AuthService {
       }
     } catch (e) {
       throw Exception('Profile update failed: $e');
+    }
+  }
+
+  // Update notification preference
+  Future<void> updateNotificationTime(String time) async {
+    try {
+      final uid = currentUser?.uid;
+      if (uid != null) {
+        await _firestore.collection('users').doc(uid).update({
+          'preferredNotificationTime': time,
+        });
+      }
+    } catch (e) {
+      throw Exception('Failed to update notification time: $e');
     }
   }
 
