@@ -162,22 +162,25 @@ class AppDesignSystem {
   static const double r24 = 24.0;
   static const double rFull = 99.0;
 
+  static const double maxContentWidth =
+      500.0; // Optimized for mobile-first feel on web/desktop
+
   // ============================================================================
   // SHADOWS - DEPTH & LAYERING
   // ============================================================================
 
   static List<BoxShadow> softShadow(Color color) => [
-    BoxShadow(
-      color: color.withOpacity(0.04),
-      blurRadius: 10,
-      offset: const Offset(0, 4),
-    ),
-    BoxShadow(
-      color: color.withOpacity(0.04),
-      blurRadius: 20,
-      offset: const Offset(0, 10),
-    ),
-  ];
+        BoxShadow(
+          color: color.withOpacity(0.04),
+          blurRadius: 10,
+          offset: const Offset(0, 4),
+        ),
+        BoxShadow(
+          color: color.withOpacity(0.04),
+          blurRadius: 20,
+          offset: const Offset(0, 10),
+        ),
+      ];
 
   // ============================================================================
   // THEME DEFINITIONS

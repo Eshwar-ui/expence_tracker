@@ -3,6 +3,9 @@ import 'package:expence_tracker/screens/home.dart';
 import 'package:expence_tracker/screens/transactions_screen.dart';
 import 'package:expence_tracker/screens/reports_screen.dart';
 import 'package:expence_tracker/screens/profile_screen.dart';
+import 'package:expence_tracker/screens/pending_transactions_screen.dart';
+import 'package:expence_tracker/services/pending_transaction_service.dart';
+import 'package:expence_tracker/utils/app_design_system.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -63,7 +66,41 @@ class _MainScaffoldState extends State<MainScaffold>
           ],
         ),
       ),
+      floatingActionButton: _buildPendingTransactionsFAB(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endTop,
       // bottomNavigationBar: _buildModernBottomNavBar(),
+    );
+  }
+
+  Widget _buildPendingTransactionsFAB() {
+    return StreamBuilder<int>(
+      stream: PendingTransactionService().getPendingTransactionCount(),
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+
+        if (count == 0) {
+          return const SizedBox.shrink();
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(top: 50, right: 8),
+          child: FloatingActionButton.extended(
+            backgroundColor: AppDesignSystem.brandPrimary,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PendingTransactionsScreen(),
+                ),
+              );
+            },
+            icon: Badge(
+              label: Text(count.toString()),
+              child: const Icon(Icons.notifications_active_rounded),
+            ),
+            label: const Text('Review'),
+          ),
+        );
+      },
     );
   }
 

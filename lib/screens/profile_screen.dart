@@ -6,7 +6,13 @@ import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/services/security_service.dart';
 import 'package:expence_tracker/models/app_user.dart';
+import 'package:expence_tracker/services/auto_tracking_settings_service.dart';
+import 'package:expence_tracker/services/notification_listener_channel.dart';
+import 'package:expence_tracker/services/notification_auto_expense_service.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
+import 'package:expence_tracker/screens/debug_test_notification_screen.dart';
+import 'package:expence_tracker/services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,17 +21,48 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final SecurityService _securityService = SecurityService();
+  final AutoTrackingSettingsService _autoTrackingSettings =
+      AutoTrackingSettingsService();
+  final NotificationListenerChannel _notificationChannel =
+      NotificationListenerChannel();
+  final NotificationAutoExpenseService _autoExpenseService =
+      NotificationAutoExpenseService();
   bool _deviceLockEnabled = false;
   Future<AppUser?>? _userFuture;
+  bool _autoTrackingEnabled = false;
+  bool _notificationAccessGranted = true;
+  int _needsReviewCount = 0;
+  bool _autoTrackingLoading = true;
+  bool _undoInProgress = false;
+  bool _permissionRevoked = false;
+  bool _noNotificationsReceived = false;
+  int? _lastNotificationTimestamp;
+  static const int _noNotificationThresholdDays = 7;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadSecuritySettings();
     _loadUserData();
+    _loadAutoTrackingSettings();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadAutoTrackingSettings();
+    }
   }
 
   void _loadUserData() {
@@ -39,6 +76,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final enabled = await _securityService.isLockEnabled();
     if (mounted) {
       setState(() => _deviceLockEnabled = enabled);
+    }
+  }
+
+  Future<void> _loadAutoTrackingSettings() async {
+    try {
+      final previousGranted = _notificationAccessGranted;
+      final enabled = await _autoTrackingSettings.isEnabled();
+      final reviewCount = await _autoTrackingSettings.getNeedsReviewCount();
+      final permissionGranted = await _notificationChannel.isListenerEnabled();
+      final lastNotification = await _notificationChannel.getLastNotification();
+      final lastTimestamp = lastNotification?.timestamp;
+      final noNotifications = _isNoNotifications(lastTimestamp);
+      if (mounted) {
+        setState(() {
+          _autoTrackingEnabled = enabled;
+          _needsReviewCount = reviewCount;
+          _notificationAccessGranted = permissionGranted;
+          _permissionRevoked = previousGranted && !permissionGranted;
+          _lastNotificationTimestamp = lastTimestamp;
+          _noNotificationsReceived = noNotifications;
+          _autoTrackingLoading = false;
+        });
+      }
+      _logAutoTrackingHealth(
+        permissionGranted: permissionGranted,
+        lastTimestamp: lastTimestamp,
+        noNotifications: noNotifications,
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _autoTrackingLoading = false;
+          _notificationAccessGranted = false;
+          _permissionRevoked = true;
+        });
+      }
+      _logAutoTrackingError(e);
     }
   }
 
@@ -109,6 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _buildSettingsSection(),
                   const VSpace.xl(),
 
+                  // Auto-Tracking
+                  _buildSectionTitle('Auto-Tracking'),
+                  const VSpace.sm(),
+                  _buildAutoTrackingSection(),
+                  const VSpace.xl(),
+
                   // Account Actions
                   _buildSectionTitle('Account'),
                   const VSpace.sm(),
@@ -129,6 +209,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       letterSpacing: 1.1,
                     ),
                   ),
+                  if (kDebugMode)
+                    GestureDetector(
+                      onLongPress: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DebugTestNotificationScreen(),
+                          ),
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Developer Options',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary.withOpacity(0.6),
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ),
+                  // Simulation (Test Only)
+                  _buildSectionTitle('Simulation'),
+                  const VSpace.sm(),
+                  DesignSystemCard(
+                    glass: true,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading:
+                              _iconBox(Icons.bug_report_rounded, Colors.purple),
+                          title: Text(
+                            'Visual Test',
+                            style: theme.textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: const Text(
+                              'Simulate incoming payment notification'),
+                          onTap: _showSimulationDialog,
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const VSpace(120),
                 ],
               ),
@@ -338,6 +463,264 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildAutoTrackingSection() {
+    final theme = Theme.of(context);
+
+    return DesignSystemCard(
+      glass: true,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: _iconBox(Icons.auto_awesome_rounded,
+                _autoTrackingEnabled ? AppDesignSystem.brandPrimary : null),
+            title: Text(
+              _autoTrackingEnabled
+                  ? 'Auto-tracking is ON'
+                  : 'Auto-tracking is OFF',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: Text(
+              'Auto-tracked',
+              style: theme.textTheme.bodySmall,
+            ),
+            trailing: Switch.adaptive(
+              value: _autoTrackingEnabled,
+              activeColor: theme.colorScheme.primary,
+              onChanged: _autoTrackingLoading
+                  ? null
+                  : (value) async {
+                      if (value && !_notificationAccessGranted) {
+                        _showPermissionDialog();
+                        return;
+                      }
+                      await _autoTrackingSettings.setEnabled(value);
+                      if (mounted) {
+                        setState(() => _autoTrackingEnabled = value);
+                      }
+                    },
+            ),
+          ),
+          if (!_notificationAccessGranted) ...[
+            const VSpace.sm(),
+            _buildPermissionMissingCard(),
+          ],
+          if (_permissionRevoked && _notificationAccessGranted == false) ...[
+            const VSpace.sm(),
+            _buildRecoveryInstructions(
+              title: 'Permission revoked',
+              message:
+                  'Auto-tracking is paused. Re-enable Notification Access to continue.',
+            ),
+          ],
+          if (_notificationAccessGranted && _noNotificationsReceived) ...[
+            const VSpace.sm(),
+            _buildRecoveryInstructions(
+              title: 'No notifications received',
+              message:
+                  'We haven\'t seen any transaction alerts yet. Make sure your bank apps have notifications turned on.',
+            ),
+          ],
+          const VSpace.sm(),
+          _buildNeedsReviewRow(),
+          const VSpace.sm(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _needsReviewCount > 0
+                      ? () => Navigator.pushNamed(context, '/scan')
+                      : null,
+                  child: const Text('Edit'),
+                ),
+              ),
+              const HSpace.md(),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _undoInProgress
+                      ? null
+                      : () async {
+                          setState(() => _undoInProgress = true);
+                          final result =
+                              await _autoExpenseService.undoLastAutoInsert();
+                          if (mounted) {
+                            setState(() => _undoInProgress = false);
+                            showDesignSystemSnackBar(
+                              context: context,
+                              message: result.success
+                                  ? 'Last auto-tracked entry removed'
+                                  : 'Nothing to undo',
+                              isError: !result.success,
+                            );
+                          }
+                        },
+                  child: const Text('Undo'),
+                ),
+              ),
+              const HSpace.md(),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _autoTrackingEnabled
+                      ? () async {
+                          await _autoTrackingSettings.setEnabled(false);
+                          if (mounted) {
+                            setState(() => _autoTrackingEnabled = false);
+                          }
+                        }
+                      : null,
+                  child: const Text('Disable'),
+                ),
+              ),
+            ],
+          ),
+          const VSpace.sm(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPermissionMissingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppDesignSystem.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+        border: Border.all(
+          color: AppDesignSystem.error.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppDesignSystem.error),
+          const HSpace.md(),
+          Expanded(
+            child: Text(
+              'Permission missing. Enable Notification Access to turn on auto-tracking.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          const HSpace.sm(),
+          TextButton(
+            onPressed: _showPermissionDialog,
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNeedsReviewRow() {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: _iconBox(Icons.rule_rounded, Colors.deepOrange),
+      title: Text(
+        'Needs review',
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+      subtitle: Text(
+        _needsReviewCount == 0
+            ? 'No pending items'
+            : '$_needsReviewCount pending item(s)',
+      ),
+    );
+  }
+
+  Widget _buildRecoveryInstructions({
+    required String title,
+    required String message,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppDesignSystem.brandAccent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+        border: Border.all(
+          color: AppDesignSystem.brandAccent.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              color: AppDesignSystem.brandAccent),
+          const HSpace.md(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const VSpace.xs(),
+                Text(
+                  message,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const HSpace.sm(),
+          TextButton(
+            onPressed: _showPermissionDialog,
+            child: const Text('Fix'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isNoNotifications(int? lastTimestamp) {
+    if (lastTimestamp == null || lastTimestamp <= 0) return true;
+    final lastDate =
+        DateTime.fromMillisecondsSinceEpoch(lastTimestamp).toLocal();
+    final diff = DateTime.now().difference(lastDate);
+    return diff.inDays >= _noNotificationThresholdDays;
+  }
+
+  void _logAutoTrackingHealth({
+    required bool permissionGranted,
+    required int? lastTimestamp,
+    required bool noNotifications,
+  }) {
+    final daysAgo = lastTimestamp == null
+        ? 'unknown'
+        : DateTime.now()
+            .difference(DateTime.fromMillisecondsSinceEpoch(lastTimestamp))
+            .inDays
+            .toString();
+    debugPrint(
+      'AutoTracking status: permission=$permissionGranted, '
+      'lastNotificationDaysAgo=$daysAgo, '
+      'noNotifications=$noNotifications',
+    );
+  }
+
+  void _logAutoTrackingError(Object error) {
+    debugPrint('AutoTracking load error: $error');
+  }
+
+  void _showPermissionDialog() {
+    showDesignSystemDialog(
+      context: context,
+      title: 'Enable Auto-Tracking',
+      message:
+          'Turn on Notification Access so we can read transaction alerts and auto-track expenses.',
+      confirmLabel: 'Open Settings',
+      onConfirm: () async {
+        await _notificationChannel.openNotificationSettings();
+      },
     );
   }
 
@@ -728,6 +1111,67 @@ class _ProfileScreenState extends State<ProfileScreen> {
           activeColor: AppDesignSystem.brandPrimary,
           onChanged: onChanged),
       contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  void _showSimulationDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Simulate Payment App',
+              style: Theme.of(context).textTheme.headlineSmall,
+              textAlign: TextAlign.center,
+            ),
+            const VSpace.md(),
+            const Text(
+              'This triggers the exact same logic that runs when a real notification arrives.',
+              textAlign: TextAlign.center,
+            ),
+            const VSpace.xl(),
+            GradientButton(
+              text: 'Simulate GPay: ₹500 to Swiggy',
+              onPressed: () {
+                Navigator.pop(context);
+                final service = NotificationService();
+                service.testTransaction(
+                  'com.google.android.apps.nbu.paisa.user',
+                  'Paid ₹500 to Swiggy',
+                );
+                showDesignSystemSnackBar(
+                  context: context,
+                  message: 'Simulated GPay Notification Triggered',
+                );
+              },
+            ),
+            const VSpace.md(),
+            GradientButton(
+              text: 'Simulate PhonePe: ₹1,200 to Zomato',
+              onPressed: () {
+                Navigator.pop(context);
+                NotificationService().testTransaction(
+                  'com.phonepe.app',
+                  'Paid ₹1,200 to Zomato',
+                );
+                showDesignSystemSnackBar(
+                  context: context,
+                  message: 'Simulated PhonePe Notification Triggered',
+                );
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

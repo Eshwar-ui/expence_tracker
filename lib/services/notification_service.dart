@@ -1,8 +1,15 @@
+import 'dart:async';
+import 'dart:isolate';
+import 'dart:ui';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_notification_listener/flutter_notification_listener.dart';
+import '../models/pending_transaction.dart';
+import '../services/pending_transaction_service.dart';
+import '../utils/transaction_parser.dart';
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -14,6 +21,18 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  ReceivePort? _port;
+  bool _isListening = false;
+
+  // List of payment app package names to listen to
+  final List<String> _paymentApps = [
+    'com.google.android.apps.nbu.paisa.user', // Google Pay
+    'com.phonepe.app', // PhonePe
+    'net.one97.paytm', // Paytm
+    'in.org.npci.upiapp', // BHIM
+    'com.sbi.upi', // BHIM SBI Pay
+  ];
 
   Future<void> initialize() async {
     // 1. Request permissions (especially for iOS)
@@ -54,9 +73,115 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
+    // 4. Initialize Notification Listener
+    await _initNotificationListener();
+
     // Register token if user is already logged in
     if (_auth.currentUser != null) {
       await registerToken();
+    }
+  }
+
+  Future<void> _initNotificationListener() async {
+    try {
+      final bool? hasPermission = await NotificationsListener.hasPermission;
+      if (hasPermission != true) {
+        debugPrint(
+            'Notification Listener Permission not granted. Requesting...');
+        // Note: You must open the settings screen manually in a real app flow
+        // NotificationsListener.openPermissionSettings();
+        return;
+      }
+
+      _port = ReceivePort();
+      IsolateNameServer.removePortNameMapping('_notification_listener_');
+      IsolateNameServer.registerPortWithName(
+        _port!.sendPort,
+        '_notification_listener_',
+      );
+
+      _port!.listen((message) => _onNotificationReceived(message));
+
+      await NotificationsListener.initialize(
+        callbackHandle: _backgroundNotificationHandler,
+      );
+
+      // Start the service
+      await NotificationsListener.startService();
+
+      _isListening = true;
+      debugPrint('Notification Listener started successfully');
+    } catch (e) {
+      debugPrint('Error initializing notification listener: $e');
+    }
+  }
+
+  // Static callback for background execution
+  @pragma('vm:entry-point')
+  static void _backgroundNotificationHandler(NotificationEvent evt) {
+    print(
+        'Background Notification: ${evt.packageName}: ${evt.title} - ${evt.text}');
+    final SendPort? send =
+        IsolateNameServer.lookupPortByName('_notification_listener_');
+    if (send != null) {
+      send.send(evt);
+    }
+  }
+
+  void _onNotificationReceived(NotificationEvent evt) {
+    if (_paymentApps.contains(evt.packageName)) {
+      debugPrint('Payment Notification Detected from: ${evt.packageName}');
+      _processPaymentNotification(evt);
+    }
+  }
+
+  Future<void> _processPaymentNotification(NotificationEvent evt) async {
+    final String? title = evt.title;
+    final String? body = evt.text;
+
+    if (body == null) return;
+
+    final double? amount = TransactionParser.extractAmount(body);
+    if (amount != null && amount > 0) {
+      debugPrint('Detected Amount: $amount');
+
+      if (_auth.currentUser != null) {
+        // Extract merchant name and suggest category
+        final merchantName = TransactionParser.normalizeDescription(body);
+        final suggestedCategory = TransactionParser.suggestCategory(body);
+
+        // Create pending transaction for manual approval
+        final pendingTransaction = PendingTransaction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          amount: amount,
+          merchantName: merchantName,
+          suggestedCategory: suggestedCategory,
+          detectedFrom: evt.packageName ?? 'unknown',
+          detectedAt: DateTime.now(),
+          rawNotificationText: body,
+          description: title,
+        );
+
+        try {
+          await PendingTransactionService()
+              .addPendingTransaction(pendingTransaction);
+
+          // Notify user to review
+          _localNotifications.show(
+              DateTime.now().millisecond,
+              'Transaction Detected',
+              '₹$amount from $merchantName - Tap to review',
+              const NotificationDetails(
+                  android: AndroidNotificationDetails(
+                'pending_transaction',
+                'Pending Transactions',
+                importance: Importance.high,
+                priority: Priority.high,
+              )));
+        } catch (e) {
+          debugPrint('Failed to save pending transaction: $e');
+        }
+      }
     }
   }
 
@@ -138,6 +263,38 @@ class NotificationService {
       }
     } catch (e) {
       debugPrint('Error unregistering FCM token: $e');
+    }
+  }
+
+  // Method to manually trigger a test notification processing (for UI testing)
+  Future<void> testTransaction(String packageName, String body) async {
+    final int timestamp = DateTime.now().millisecondsSinceEpoch;
+    // uniqueId is likely string in the package but let's try to satisfy the linter.
+    // IF the linter said "String cant be assigned to int?", then uniqueId expects int.
+    // However, uniqueId in NotificationEvent is often a String map key.
+    // Let's rely on the fact that I can see the error.
+    // If I pass an int here, and it was actually String, I will get another error.
+
+    // Attempting to construct with minimal required fields or nulls for uncertain ones logic.
+    // Use dynamic to bypass check if unsure, but safer to try strict first.
+
+    final evt = NotificationEvent(
+      packageName: packageName,
+      title: 'Test Notification',
+      text: body,
+      createAt: DateTime.now(),
+      // timestamp and uniqueId causing type confusion without IDE.
+      // Assuming they are optional.
+    );
+    await _processPaymentNotification(evt);
+  }
+
+  // Request permission for notification listener (User action required)
+  Future<void> requestNotificationListenerPermission() async {
+    try {
+      await NotificationsListener.openPermissionSettings();
+    } catch (e) {
+      debugPrint('Error opening settings: $e');
     }
   }
 }

@@ -63,8 +63,8 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
       body: _isLoading
           ? const DesignSystemLoading()
           : _budgets.isEmpty
-          ? _buildEmptyState()
-          : _buildContent(),
+              ? _buildEmptyState()
+              : _buildContent(),
     );
   }
 
@@ -134,7 +134,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
             child: LinearProgressIndicator(
-              value: total > 0 ? (spent / total).clamp(0, 1) : 0,
+              value: total > 0 ? (spent / total).clamp(0.0, 1.0) : 0.0,
               minHeight: 12,
               color: spent > total
                   ? AppDesignSystem.error
@@ -271,7 +271,9 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: b.limit > 0 ? (b.spent / b.limit).clamp(0, 1) : 0,
+                      value: b.limit > 0
+                          ? (b.spent / b.limit).clamp(0.0, 1.0)
+                          : 0.0,
                       minHeight: 6,
                       color: b.spent > b.limit
                           ? AppDesignSystem.error

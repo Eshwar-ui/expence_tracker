@@ -11,6 +11,9 @@ import '../widgets/design_system_components.dart';
 
 import '../utils/transaction_parser.dart';
 
+import '../models/recurring_transaction.dart';
+import '../services/recurring_transaction_service.dart';
+
 class ExpenseDialog extends StatefulWidget {
   final TransactionSMS? smsTransaction;
   final Expense? expense;
@@ -34,6 +37,8 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
   final _descriptionController = TextEditingController();
   final CategoryService _categoryService = CategoryService();
   final FirestoreService _firestoreService = FirestoreService();
+  final RecurringTransactionService _recurringService =
+      RecurringTransactionService();
 
   TransactionType _selectedType = TransactionType.expense;
   String? _selectedCategory;
@@ -41,12 +46,27 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
   bool _isLoading = false;
   bool _categoriesLoading = true;
   List<model.Category> _categories = [];
+  List<RecurringTransaction> _recurringOptions = [];
 
   @override
   void initState() {
     super.initState();
     _loadCategories();
+    _loadRecurringOptions();
     _initializeFields();
+  }
+
+  Future<void> _loadRecurringOptions() async {
+    try {
+      final options = await _recurringService.getRecurringTransactions();
+      if (mounted) {
+        setState(() {
+          _recurringOptions = options;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load recurring options: $e');
+    }
   }
 
   Future<void> _loadCategories() async {
@@ -364,6 +384,64 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                 ],
               ),
               const VSpace.lg(),
+
+              if (widget.expense == null && _recurringOptions.isNotEmpty) ...[
+                Text(
+                  'Quick Add from Auto-Payments',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
+                const VSpace.sm(),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: _recurringOptions.map((t) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ActionChip(
+                          avatar: Icon(
+                            Icons.bolt_rounded,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          ),
+                          label: Text(t.title),
+                          backgroundColor:
+                              theme.colorScheme.primary.withOpacity(0.05),
+                          side: BorderSide(
+                            color: theme.colorScheme.primary.withOpacity(
+                              0.2,
+                            ),
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _titleController.text = t.title;
+                              _amountController.text =
+                                  t.amount.toStringAsFixed(0);
+                              _selectedType = TransactionType.expense;
+                              if (_categories.any(
+                                (c) => c.name == t.category,
+                              )) {
+                                _selectedCategory = t.category;
+                              }
+                            });
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Filled from ${t.title}'),
+                                duration: const Duration(seconds: 1),
+                                backgroundColor: theme.colorScheme.secondary,
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const VSpace.lg(),
+              ],
 
               // Type Toggle
               Row(

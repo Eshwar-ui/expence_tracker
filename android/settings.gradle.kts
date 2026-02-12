@@ -27,3 +27,18 @@ plugins {
 }
 
 include(":app")
+
+// Patch for flutter_notification_listener namespace issue
+gradle.lifecycle.beforeProject {
+    if (path == ":flutter_notification_listener") {
+        afterEvaluate {
+            val extension = extensions.findByType(com.android.build.gradle.LibraryExtension::class.java)
+            if (extension != null) {
+                if (extension.namespace == null) {
+                    println("Applying namespace patch to flutter_notification_listener")
+                    extension.namespace = "com.github.tfl.flutter_notification_listener"
+                }
+            }
+        }
+    }
+}

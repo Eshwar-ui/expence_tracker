@@ -8,9 +8,6 @@ import 'package:expence_tracker/screens/reports_screen.dart';
 import 'package:expence_tracker/screens/budget_planner_screen.dart';
 import 'package:expence_tracker/screens/recurring_transactions_screen.dart';
 import 'package:expence_tracker/screens/ai_predictions_screen.dart';
-import 'package:expence_tracker/services/auth_service.dart';
-import 'package:expence_tracker/services/security_service.dart';
-import 'package:expence_tracker/screens/lock_screen.dart';
 import 'package:expence_tracker/screens/categories_screen.dart';
 import 'package:expence_tracker/firebase_options.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
@@ -19,6 +16,8 @@ import 'package:expence_tracker/services/notification_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:expence_tracker/screens/splash_screen.dart';
+import 'package:expence_tracker/widgets/responsive_layout.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 
@@ -77,7 +76,13 @@ class MyApp extends StatelessWidget {
       theme: AppDesignSystem.lightTheme,
       darkTheme: AppDesignSystem.darkTheme,
       themeMode: ThemeMode.system,
-      home: const AuthWrapper(),
+      builder: (context, child) {
+        return ResponsiveLayout(
+          useContainer: false, // Don't add extra shadow globally here
+          child: child!,
+        );
+      },
+      home: const VideoSplashScreen(),
       routes: {
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const HomeScreen(),
@@ -90,65 +95,6 @@ class MyApp extends StatelessWidget {
         '/ai-predictions': (context) => const AIPredictionsScreen(),
         '/categories': (context) => const CategoriesScreen(),
         '/main': (context) => const MainScaffold(),
-      },
-    );
-  }
-}
-
-class AuthWrapper extends StatefulWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  final AuthService _authService = AuthService();
-  final SecurityService _securityService = SecurityService();
-  bool _isDeviceUnlocked = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder(
-      stream: _authService.authStateChanges,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.hasData && snapshot.data != null) {
-          // User is authenticated, now check for device lock
-          return FutureBuilder<bool>(
-            future: _securityService.isLockEnabled(),
-            builder: (context, lockSnapshot) {
-              if (lockSnapshot.connectionState == ConnectionState.waiting) {
-                return const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                );
-              }
-
-              final bool isLockEnabled = lockSnapshot.data ?? false;
-
-              if (isLockEnabled && !_isDeviceUnlocked) {
-                return LockScreen(
-                  onAuthenticated: () {
-                    setState(() {
-                      _isDeviceUnlocked = true;
-                    });
-                  },
-                );
-              }
-
-              return const MainScaffold();
-            },
-          );
-        } else {
-          // Reset unlock state when user signs out
-          _isDeviceUnlocked = false;
-          return const AuthScreen();
-        }
       },
     );
   }
