@@ -6,6 +6,18 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 8000;
 
+// Debugging: Log server time and timezone on startup
+const now = new Date();
+console.log(`🚀 Server starting...`);
+console.log(`🕒 Server Time: ${now.toString()}`);
+console.log(`🌍 Server ISO Time: ${now.toISOString()}`);
+console.log(`📅 Server Timezone Offset: ${now.getTimezoneOffset()}`);
+if (process.env.TZ) {
+  console.log(`🌐 Configured TZ Variable: ${process.env.TZ}`);
+} else {
+  console.log(`⚠️ No TZ variable detected! Server might look for UTC time.`);
+}
+
 const fs = require('fs');
 const path = require('path');
 
