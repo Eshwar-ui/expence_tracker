@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/budget.dart';
@@ -144,24 +145,46 @@ class BudgetService {
 
     try {
       final budgets = await getBudgets();
-      final now = DateTime.now();
+      if (budgets.isEmpty) return;
 
-      // Calculate start of current month
+      final now = DateTime.now();
       final startOfMonth = DateTime(now.year, now.month, 1);
 
-      for (final budget in budgets) {
-        final spent = await calculateSpentForCategory(
-          budget.category,
-          startOfMonth,
-          now,
-        );
+      // Fetch all expenses for the current month once
+      final querySnapshot = await _firestore
+          .collection('users')
+          .doc(_userId)
+          .collection('expenses')
+          .where('type', isEqualTo: 'expense')
+          // Using String comparison if dates are stored as ISO Strings
+          .get();
 
-        if (spent != budget.spent) {
+      final categorySpent = <String, double>{};
+      for (final doc in querySnapshot.docs) {
+        final data = doc.data();
+        final dateStr = data['date'] as String?;
+        if (dateStr == null) continue;
+
+        final date = DateTime.parse(dateStr);
+        if (date.isBefore(startOfMonth)) continue;
+
+        final category = data['category'] as String? ?? 'Other';
+        final amount = (data['amount'] ?? 0).toDouble();
+
+        categorySpent[category.toLowerCase()] =
+            (categorySpent[category.toLowerCase()] ?? 0.0) + amount;
+      }
+
+      for (final budget in budgets) {
+        final spent = categorySpent[budget.category.toLowerCase()] ?? 0.0;
+
+        if ((spent - budget.spent).abs() > 0.01) {
           await updateBudget(budget.copyWith(spent: spent, updatedAt: now));
         }
       }
     } catch (e) {
-      throw Exception('Failed to update budget spent amounts: $e');
+      debugPrint('Failed to update budget spent amounts: $e');
+      // Non-blocking failure
     }
   }
 

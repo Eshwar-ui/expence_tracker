@@ -28,9 +28,9 @@ class AnalyticsService {
       final openingBalance = allExpenses
           .where((e) => e.date.isBefore(start))
           .fold<double>(0.0, (sum, e) {
-            if (e.type == TransactionType.income) return sum + e.amount;
-            return sum - e.amount;
-          });
+        if (e.type == TransactionType.income) return sum + e.amount;
+        return sum - e.amount;
+      });
 
       // Calculate totals for the range
       final totalIncome = expenses
@@ -61,12 +61,10 @@ class AnalyticsService {
             (monthlyBreakdown[monthKey] ?? 0.0) + expense.amount;
       }
 
-      // Daily breakdown (last 30 days)
+      // Daily breakdown for the selected range
       final dailyBreakdown = <String, double>{};
-      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-      for (final expense in allExpenses) {
-        if (expense.date.isAfter(thirtyDaysAgo) &&
-            expense.type == TransactionType.expense) {
+      for (final expense in expenses) {
+        if (expense.type == TransactionType.expense) {
           final dayKey =
               '${expense.date.year}-${expense.date.month.toString().padLeft(2, '0')}-${expense.date.day.toString().padLeft(2, '0')}';
           dailyBreakdown[dayKey] =
@@ -317,9 +315,8 @@ class AnalyticsService {
 
     // Daily average insight
     final daysInMonth = DateTime.now().day;
-    final averageDailySpending = daysInMonth > 0
-        ? totalExpenses / daysInMonth
-        : 0.0;
+    final averageDailySpending =
+        daysInMonth > 0 ? totalExpenses / daysInMonth : 0.0;
     insights.add(
       SpendingInsight(
         title: 'Daily Average',
@@ -366,8 +363,8 @@ class AnalyticsService {
         'trend': change > 0
             ? 'increasing'
             : change < 0
-            ? 'decreasing'
-            : 'stable',
+                ? 'decreasing'
+                : 'stable',
       };
     } catch (e) {
       throw Exception('Failed to get spending patterns: $e');

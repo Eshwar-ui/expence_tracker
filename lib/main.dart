@@ -20,6 +20,7 @@ import 'package:expence_tracker/screens/splash_screen.dart';
 import 'package:expence_tracker/widgets/responsive_layout.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:expence_tracker/services/app_icon_switcher.dart';
 
 // Background message handler
 @pragma('vm:entry-point')
@@ -65,8 +66,45 @@ void main() async {
   });
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // Initial check on app start
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAppIconTheme();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _checkAppIconTheme();
+  }
+
+  void _checkAppIconTheme() {
+    final brightness =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    if (brightness == Brightness.dark) {
+      AppIconSwitcher.switchToDark();
+    } else {
+      AppIconSwitcher.switchToLight();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

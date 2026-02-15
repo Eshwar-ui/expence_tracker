@@ -115,12 +115,12 @@ class _ReportsScreenState extends State<ReportsScreen>
       body: _loading
           ? const DesignSystemLoading()
           : _data == null
-          ? const DesignSystemEmptyState(
-              icon: Icons.analytics_rounded,
-              title: 'No Insights',
-              message: 'Add transactions to see your financial patterns.',
-            )
-          : _buildContent(),
+              ? const DesignSystemEmptyState(
+                  icon: Icons.analytics_rounded,
+                  title: 'No Insights',
+                  message: 'Add transactions to see your financial patterns.',
+                )
+              : _buildContent(),
     );
   }
 
@@ -200,6 +200,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Widget _buildTrendChart() {
+    final theme = Theme.of(context);
     final sortedEntries = _data!.dailyBreakdown.entries.toList()
       ..sort((a, b) => a.key.compareTo(b.key));
 
@@ -209,22 +210,144 @@ class _ReportsScreenState extends State<ReportsScreen>
 
     if (spots.isEmpty) return const Center(child: Text('Insufficient data'));
 
+    double maxVal = spots.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+    if (maxVal < 1000) maxVal = 1000;
+
     return LineChart(
       LineChartData(
-        gridData: const FlGridData(show: false),
-        titlesData: const FlTitlesData(show: false),
+        minY: 0,
+        maxY: maxVal * 1.2,
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipColor: (_) => theme.colorScheme.surface.withOpacity(0.9),
+            tooltipRoundedRadius: 8,
+            getTooltipItems: (touchedSpots) {
+              return touchedSpots.map((spot) {
+                final dateStr = sortedEntries[spot.x.toInt()].key;
+                final date = DateTime.parse(dateStr);
+                return LineTooltipItem(
+                  '${DateFormat('MMM d').format(date)}\n',
+                  TextStyle(
+                    color: theme.textTheme.bodyMedium?.color ??
+                        AppDesignSystem.textMed,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '₹${spot.y.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: AppDesignSystem.brandPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                );
+              }).toList();
+            },
+          ),
+        ),
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: maxVal / 4,
+          getDrawingHorizontalLine: (value) => FlLine(
+            color: Colors.white.withOpacity(0.05),
+            strokeWidth: 1,
+            dashArray: [5, 5],
+          ),
+        ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles:
+              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 30,
+              interval: (spots.length / 5).clamp(1, 31).toDouble(),
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index < 0 || index >= sortedEntries.length)
+                  return const SizedBox.shrink();
+                final dateStr = sortedEntries[index].key;
+                final date = DateTime.parse(dateStr);
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    DateFormat('d').format(date),
+                    style: TextStyle(
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.6),
+                      fontSize: 10,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              interval: maxVal / 4,
+              reservedSize: 45,
+              getTitlesWidget: (value, meta) {
+                if (value == 0) return const SizedBox.shrink();
+                String text = '';
+                if (value >= 1000) {
+                  text = '${(value / 1000).toStringAsFixed(1)}k';
+                } else {
+                  text = value.toStringAsFixed(0);
+                }
+                return Text(
+                  text,
+                  style: TextStyle(
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.left,
+                );
+              },
+            ),
+          ),
+        ),
         borderData: FlBorderData(show: false),
         lineBarsData: [
           LineChartBarData(
             spots: spots,
             isCurved: true,
-            color: AppDesignSystem.brandPrimary,
+            gradient: LinearGradient(
+              colors: [
+                AppDesignSystem.brandPrimary,
+                AppDesignSystem.brandAccent,
+              ],
+            ),
             barWidth: 4,
+            isStrokeCapRound: true,
+            dotData: FlDotData(
+              show: true,
+              getDotPainter: (spot, percent, barData, index) =>
+                  FlDotCirclePainter(
+                radius: 3,
+                color: Colors.white,
+                strokeWidth: 2,
+                strokeColor: AppDesignSystem.brandPrimary,
+              ),
+            ),
             belowBarData: BarAreaData(
               show: true,
-              color: AppDesignSystem.brandPrimary.withOpacity(0.1),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppDesignSystem.brandPrimary.withOpacity(0.2),
+                  AppDesignSystem.brandPrimary.withOpacity(0.0),
+                ],
+              ),
             ),
-            dotData: const FlDotData(show: false),
           ),
         ],
       ),

@@ -64,10 +64,17 @@ class Budget {
         (e) => e.name == map['frequency'],
         orElse: () => BudgetFrequency.monthly,
       ),
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
-      updatedAt: (map['updatedAt'] as Timestamp).toDate(),
+      createdAt: _parseDate(map['createdAt']),
+      updatedAt: _parseDate(map['updatedAt']),
       isActive: map['isActive'] ?? true,
     );
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.parse(value);
+    return DateTime.now();
   }
 
   Budget copyWith({
@@ -137,13 +144,12 @@ class BudgetPlan {
       userId: map['userId'] ?? '',
       monthlyIncome: (map['monthlyIncome'] ?? 0).toDouble(),
       savingsTarget: (map['savingsTarget'] ?? 0).toDouble(),
-      budgets:
-          (map['budgets'] as List<dynamic>?)
+      budgets: (map['budgets'] as List<dynamic>?)
               ?.map((b) => Budget.fromMap(b as Map<String, dynamic>))
               .toList() ??
           [],
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
-      updatedAt: (map['updatedAt'] as Timestamp).toDate(),
+      createdAt: Budget._parseDate(map['createdAt']),
+      updatedAt: Budget._parseDate(map['updatedAt']),
     );
   }
 }

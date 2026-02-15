@@ -38,6 +38,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('Error loading budgets: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
     }
@@ -385,9 +386,56 @@ class _BudgetDialogState extends State<_BudgetDialog> {
             isLoading: _loading,
             onPressed: _save,
           ),
+          if (widget.budget != null) ...[
+            const VSpace.md(),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: _delete,
+                icon: const Icon(Icons.delete_outline_rounded,
+                    color: AppDesignSystem.error),
+                label: const Text(
+                  'Delete Budget',
+                  style: TextStyle(color: AppDesignSystem.error),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _delete() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Budget?'),
+        content: const Text(
+            'This will remove this budget category and its limit tracking.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete',
+                style: TextStyle(color: AppDesignSystem.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _loading = true);
+      try {
+        await widget.budgetService.deleteBudget(widget.budget!.id);
+        widget.onSaved();
+        Navigator.pop(context);
+      } finally {
+        setState(() => _loading = false);
+      }
+    }
   }
 
   Future<void> _save() async {
