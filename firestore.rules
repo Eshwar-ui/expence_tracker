@@ -24,28 +24,9 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if isOwner(userId);
       
-      // Expenses subcollection under users
-      match /expenses/{expenseId} {
-        allow read, write: if isOwner(userId);
-      }
-      
-      // Budgets subcollection under users
-      match /budgets/{budgetId} {
-        allow read, write: if isOwner(userId);
-      }
-      
-      // Budget plans subcollection under users
-      match /budget_plans/{planId} {
-        allow read, write: if isOwner(userId);
-      }
-      
-      // Recurring transactions subcollection under users
-      match /recurring_transactions/{transactionId} {
-        allow read, write: if isOwner(userId);
-      }
-      
-      // Categories subcollection under users
-      match /categories/{categoryId} {
+      // Catch-all: Allow access to ALL subcollections for the owner
+      // This prevents future "PERMISSION_DENIED" errors when new features are added
+      match /{subcollection}/{docId} {
         allow read, write: if isOwner(userId);
       }
     }

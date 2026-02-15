@@ -113,16 +113,17 @@ cron.schedule('0 * * * *', async () => {
 });
 
 // 2. Budget Alerts (Real-time listener)
-// Note: This listens for changes in ALL user expenses
-// For a very large user base, move this logic to the client app (Flutter)
+console.log('👀 Listening for new expenses across all users...');
 db.collectionGroup('expenses').onSnapshot(snapshot => {
   snapshot.docChanges().forEach(async (change) => {
     if (change.type === 'added') {
       const expenseData = change.doc.data();
       const expenseRef = change.doc.ref;
-      const userId = expenseRef.parent.parent.id; // Get userId from the parent document path
+      const userId = expenseRef.parent.parent.id; 
       const category = expenseData.category;
       const amount = expenseData.amount;
+      
+      console.log(`📝 New expense detected: $${amount} for ${category} (User: ${userId})`);
 
       if (!category || !userId) return;
 
@@ -133,12 +134,17 @@ db.collectionGroup('expenses').onSnapshot(snapshot => {
           .limit(1)
           .get();
 
-        if (budgetSnapshot.empty) return;
+        if (budgetSnapshot.empty) {
+            console.log(`   ⚠️ No active budget found for category: ${category}`);
+            return;
+        }
 
         const budgetDoc = budgetSnapshot.docs[0];
         const budgetData = budgetDoc.data();
         const limit = budgetData.limit;
         const spent = (budgetData.spent || 0) + amount;
+        
+        console.log(`   📊 Budget found: ${category} | Limit: ${limit} | New Spent: ${spent}`);
 
         // Update spent amount in Firestore
         await budgetDoc.ref.update({
@@ -150,16 +156,23 @@ db.collectionGroup('expenses').onSnapshot(snapshot => {
         let title = "";
         let body = "";
 
+        console.log(`   🧮 Checking limits: Spent: ${spent} vs Limit: ${limit}`);
+
         if (spent >= limit) {
           title = "Budget Exhausted! ⚠️";
           body = `You've exceeded your budget for ${category}. Total spent: ${spent.toFixed(2)} / ${limit.toFixed(2)}`;
+          console.log('   🚨 Logic: Budget Exhausted!');
         } else if (spent >= limit * 0.9) {
           title = "Budget Alert! 🔔";
           body = `You've reached 90% of your budget for ${category}. Staying within limits?`;
+          console.log('   🚨 Logic: Budget Alert (90%)!');
+        } else {
+            console.log('   ✅ Within safe limits.');
         }
 
         if (title && body) {
           const tokenSnapshot = await db.collection('users').doc(userId).collection('fcm_tokens').get();
+          console.log(`   🔍 Found ${tokenSnapshot.size} tokens for user.`);
           const tokens = [];
           tokenSnapshot.forEach(doc => tokens.push(doc.data().token));
 
@@ -171,8 +184,17 @@ db.collectionGroup('expenses').onSnapshot(snapshot => {
                 screen: "/budget",
               },
             };
-            await admin.messaging().sendToDevice(tokens, payload);
-            console.log(`[ALERT] Notified user ${userId} for category ${category}`);
+            try {
+              const response = await admin.messaging().sendToDevice(tokens, payload);
+              console.log(`[ALERT] Sent to ${tokens.length} devices. Success: ${response.successCount}, Failure: ${response.failureCount}`);
+              if (response.failureCount > 0) {
+                  response.results.forEach((result, idx) => {
+                      if (result.error) console.log(`   -> Error for token ${idx}: ${result.error}`);
+                  });
+              }
+            } catch(e) {
+                console.error("Error sending message:", e);
+            }
           }
         }
       } catch (error) {

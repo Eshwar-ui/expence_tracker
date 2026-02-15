@@ -5,7 +5,14 @@ import 'package:expence_tracker/screens/reports_screen.dart';
 import 'package:expence_tracker/screens/profile_screen.dart';
 import 'package:expence_tracker/screens/pending_transactions_screen.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
+import 'package:expence_tracker/services/notification_service.dart';
+import 'package:expence_tracker/services/firestore_service.dart';
+import 'package:expence_tracker/models/pending_transaction.dart';
+import 'package:expence_tracker/models/expence.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
+import 'dart:async';
+import 'dart:ui';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -17,10 +24,166 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
+  StreamSubscription<PendingTransaction>? _transactionSubscription;
 
   @override
   void initState() {
     super.initState();
+    _initTransactionListener();
+  }
+
+  @override
+  void dispose() {
+    _transactionSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _initTransactionListener() {
+    _transactionSubscription =
+        NotificationService().detectedTransactionStream.listen((transaction) {
+      if (mounted) {
+        _showTransactionPopup(transaction);
+      }
+    });
+  }
+
+  void _showTransactionPopup(PendingTransaction transaction) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          child: DesignSystemCard(
+            glass: true,
+            padding: const EdgeInsets.all(AppDesignSystem.s24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppDesignSystem.brandPrimary.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    color: AppDesignSystem.brandPrimary,
+                    size: 40,
+                  ),
+                ),
+                const VSpace.md(),
+                Text(
+                  'Transaction Detected',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const VSpace.sm(),
+                Text(
+                  'We detected a potential expense from ${transaction.appName}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.7),
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+                const VSpace.lg(),
+                DesignSystemCard(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              transaction.merchantName,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Via ${transaction.appName}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const HSpace.md(),
+                      Text(
+                        '₹${transaction.amount.toStringAsFixed(2)}',
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  color: AppDesignSystem.brandPrimary,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+                const VSpace.xl(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SecondaryButton(
+                        text: 'Discard',
+                        onPressed: () async {
+                          await PendingTransactionService()
+                              .deletePendingTransaction(transaction.id);
+                          if (context.mounted) Navigator.pop(context);
+                        },
+                      ),
+                    ),
+                    const HSpace.md(),
+                    Expanded(
+                      child: GradientButton(
+                        text: 'Add Entry',
+                        onPressed: () async {
+                          final expense = Expense(
+                            id: transaction.id,
+                            title: transaction.merchantName,
+                            amount: transaction.amount,
+                            date: transaction.detectedAt,
+                            category: transaction.suggestedCategory ?? 'Other',
+                            description: 'Auto-detected via notification',
+                            type: TransactionType.expense,
+                            paymentMethod: transaction.appName,
+                          );
+
+                          await FirestoreService().addExpense(expense);
+                          await PendingTransactionService()
+                              .deletePendingTransaction(transaction.id);
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                            showDesignSystemSnackBar(
+                              context: context,
+                              message: 'Expense added successfully',
+                              icon: Icons.check_circle_rounded,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   final List<Widget> _pages = const [

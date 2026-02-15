@@ -25,6 +25,12 @@ class NotificationService {
   ReceivePort? _port;
   bool _isListening = false;
 
+  // Stream for real-time notification detection UI
+  final _detectedTransactionController =
+      StreamController<PendingTransaction>.broadcast();
+  Stream<PendingTransaction> get detectedTransactionStream =>
+      _detectedTransactionController.stream;
+
   // List of payment app package names to listen to
   final List<String> _paymentApps = [
     'com.google.android.apps.nbu.paisa.user', // Google Pay
@@ -166,7 +172,10 @@ class NotificationService {
           await PendingTransactionService()
               .addPendingTransaction(pendingTransaction);
 
-          // Notify user to review
+          // Broadcast for real-time UI popup
+          _detectedTransactionController.add(pendingTransaction);
+
+          // Notify user to review via system tray
           _localNotifications.show(
               DateTime.now().millisecond,
               'Transaction Detected',

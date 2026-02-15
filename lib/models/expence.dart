@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum TransactionType { income, expense }
 
 class Expense {
@@ -44,10 +46,10 @@ class Expense {
   // Create Expense from Map (JSON deserialization)
   factory Expense.fromJson(Map<String, dynamic> json) {
     return Expense(
-      id: json['id'],
-      title: json['title'],
-      amount: (json['amount'] as num).toDouble(),
-      date: DateTime.parse(json['date']),
+      id: json['id'] ?? '',
+      title: json['title'] ?? 'Untitled',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
+      date: _parseDate(json['date']),
       category: json['category'] ?? '',
       description: json['description'] ?? '',
       type: json['type'] != null
@@ -60,6 +62,14 @@ class Expense {
       location: json['location'],
       paymentMethod: json['paymentMethod'],
     );
+  }
+
+  // Parse date from either a Firestore Timestamp or an ISO 8601 String
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.parse(value);
+    return DateTime.now();
   }
 
   // Copy with method for updating expenses

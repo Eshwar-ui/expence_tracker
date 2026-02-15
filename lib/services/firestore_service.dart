@@ -29,9 +29,8 @@ class FirestoreService {
   // Get all expenses from Firestore
   Future<List<Expense>> getExpenses() async {
     try {
-      final snapshot = await _expensesCollection
-          .orderBy('date', descending: true)
-          .get();
+      final snapshot =
+          await _expensesCollection.orderBy('date', descending: true).get();
 
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -124,11 +123,11 @@ class FirestoreService {
         .orderBy('date', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return Expense.fromJson(data);
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Expense.fromJson(data);
+      }).toList();
+    });
   }
 
   // Get expenses by category stream
@@ -138,11 +137,11 @@ class FirestoreService {
         .orderBy('date', descending: true)
         .snapshots()
         .map((snapshot) {
-          return snapshot.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return Expense.fromJson(data);
-          }).toList();
-        });
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return Expense.fromJson(data);
+      }).toList();
+    });
   }
 
   // Clear all expenses (for testing or reset functionality)
