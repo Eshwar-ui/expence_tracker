@@ -1,14 +1,15 @@
 import 'dart:async';
-import 'dart:isolate';
-import 'dart:ui';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_notification_listener/flutter_notification_listener.dart';
+import 'package:flutter/material.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 import '../models/pending_transaction.dart';
 import '../services/pending_transaction_service.dart';
+import '../services/notification_listener_channel.dart';
 import '../utils/transaction_parser.dart';
 
 class NotificationService {
@@ -22,8 +23,9 @@ class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  ReceivePort? _port;
   bool _isListening = false;
+  final NotificationListenerChannel _nativeChannel =
+      NotificationListenerChannel();
 
   // Stream for real-time notification detection UI
   final _detectedTransactionController =
@@ -57,7 +59,7 @@ class NotificationService {
       debugPrint('User declined or has not accepted permission');
     }
 
-    // 2. Initialize local notifications for foreground messages
+    // 2. Initialize local notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -70,16 +72,19 @@ class NotificationService {
     await _localNotifications.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle notification tap
         debugPrint('Notification tapped: ${response.payload}');
       },
     );
 
-    // 3. Handle messages
+    // 3. Initialize Timezone for scheduled reminders
+    tz.initializeTimeZones();
+
+    // 4. Handle messages
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageOpenedApp);
 
-    // 4. Initialize Notification Listener
+    // 5. Initialize Native Notification Listener & Allowlist
+    await _nativeChannel.setAllowedPackages(_paymentApps);
     await _initNotificationListener();
 
     // Register token if user is already logged in
@@ -90,109 +95,65 @@ class NotificationService {
 
   Future<void> _initNotificationListener() async {
     try {
-      final bool? hasPermission = await NotificationsListener.hasPermission;
-      if (hasPermission != true) {
-        debugPrint(
-            'Notification Listener Permission not granted. Requesting...');
-        // Note: You must open the settings screen manually in a real app flow
-        // NotificationsListener.openPermissionSettings();
+      final bool hasPermission = await _nativeChannel.isListenerEnabled();
+      if (!hasPermission) {
+        debugPrint('Native Notification Listener Permission not granted.');
         return;
       }
 
-      _port = ReceivePort();
-      IsolateNameServer.removePortNameMapping('_notification_listener_');
-      IsolateNameServer.registerPortWithName(
-        _port!.sendPort,
-        '_notification_listener_',
-      );
+      _nativeChannel.stream.listen((payload) {
+        debugPrint('Incoming native payload: ${payload.packageName}');
+        final evt = PendingTransaction(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          amount: TransactionParser.extractAmount(payload.text) ?? 0.0,
+          merchantName: TransactionParser.normalizeDescription(payload.text),
+          detectedFrom: payload.packageName,
+          detectedAt: DateTime.now(),
+          rawNotificationText: payload.text,
+          description: payload.title,
+        );
 
-      _port!.listen((message) => _onNotificationReceived(message));
-
-      await NotificationsListener.initialize(
-        callbackHandle: _backgroundNotificationHandler,
-      );
-
-      // Start the service
-      await NotificationsListener.startService();
+        if (evt.amount > 0) {
+          _processTransactionEvent(evt);
+        }
+      });
 
       _isListening = true;
-      debugPrint('Notification Listener started successfully');
+      debugPrint('Notification Listener stream connected');
     } catch (e) {
       debugPrint('Error initializing notification listener: $e');
     }
   }
 
-  // Static callback for background execution
-  @pragma('vm:entry-point')
-  static void _backgroundNotificationHandler(NotificationEvent evt) {
-    print(
-        'Background Notification: ${evt.packageName}: ${evt.title} - ${evt.text}');
-    final SendPort? send =
-        IsolateNameServer.lookupPortByName('_notification_listener_');
-    if (send != null) {
-      send.send(evt);
+  Future<void> _processTransactionEvent(PendingTransaction transaction) async {
+    if (_auth.currentUser == null) return;
+
+    try {
+      await PendingTransactionService().addPendingTransaction(transaction);
+
+      // Broadcast for real-time UI popup
+      _detectedTransactionController.add(transaction);
+
+      // Notify user via system tray
+      _localNotifications.show(
+        DateTime.now().millisecond,
+        'Transaction Detected',
+        '₹${transaction.amount} from ${transaction.merchantName} - Tap to review',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'pending_transaction',
+            'Pending Transactions',
+            importance: Importance.high,
+            priority: Priority.high,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Failed to process transaction event: $e');
     }
   }
 
-  void _onNotificationReceived(NotificationEvent evt) {
-    if (_paymentApps.contains(evt.packageName)) {
-      debugPrint('Payment Notification Detected from: ${evt.packageName}');
-      _processPaymentNotification(evt);
-    }
-  }
-
-  Future<void> _processPaymentNotification(NotificationEvent evt) async {
-    final String? title = evt.title;
-    final String? body = evt.text;
-
-    if (body == null) return;
-
-    final double? amount = TransactionParser.extractAmount(body);
-    if (amount != null && amount > 0) {
-      debugPrint('Detected Amount: $amount');
-
-      if (_auth.currentUser != null) {
-        // Extract merchant name and suggest category
-        final merchantName = TransactionParser.normalizeDescription(body);
-        final suggestedCategory = TransactionParser.suggestCategory(body);
-
-        // Create pending transaction for manual approval
-        final pendingTransaction = PendingTransaction(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          amount: amount,
-          merchantName: merchantName,
-          suggestedCategory: suggestedCategory,
-          detectedFrom: evt.packageName ?? 'unknown',
-          detectedAt: DateTime.now(),
-          rawNotificationText: body,
-          description: title,
-        );
-
-        try {
-          await PendingTransactionService()
-              .addPendingTransaction(pendingTransaction);
-
-          // Broadcast for real-time UI popup
-          _detectedTransactionController.add(pendingTransaction);
-
-          // Notify user to review via system tray
-          _localNotifications.show(
-              DateTime.now().millisecond,
-              'Transaction Detected',
-              '₹$amount from $merchantName - Tap to review',
-              const NotificationDetails(
-                  android: AndroidNotificationDetails(
-                'pending_transaction',
-                'Pending Transactions',
-                importance: Importance.high,
-                priority: Priority.high,
-              )));
-        } catch (e) {
-          debugPrint('Failed to save pending transaction: $e');
-        }
-      }
-    }
-  }
+  // Removed processPaymentNotification and replaced with processTransactionEvent flow
 
   Future<void> _handleForegroundMessage(RemoteMessage message) async {
     debugPrint('Got a message whilst in the foreground!');
@@ -277,31 +238,79 @@ class NotificationService {
 
   // Method to manually trigger a test notification processing (for UI testing)
   Future<void> testTransaction(String packageName, String body) async {
-    final int timestamp = DateTime.now().millisecondsSinceEpoch;
-    // uniqueId is likely string in the package but let's try to satisfy the linter.
-    // IF the linter said "String cant be assigned to int?", then uniqueId expects int.
-    // However, uniqueId in NotificationEvent is often a String map key.
-    // Let's rely on the fact that I can see the error.
-    // If I pass an int here, and it was actually String, I will get another error.
+    final amount = TransactionParser.extractAmount(body) ?? 0.0;
+    final merchant = TransactionParser.normalizeDescription(body);
 
-    // Attempting to construct with minimal required fields or nulls for uncertain ones logic.
-    // Use dynamic to bypass check if unsure, but safer to try strict first.
-
-    final evt = NotificationEvent(
-      packageName: packageName,
-      title: 'Test Notification',
-      text: body,
-      createAt: DateTime.now(),
-      // timestamp and uniqueId causing type confusion without IDE.
-      // Assuming they are optional.
+    final transaction = PendingTransaction(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      amount: amount,
+      merchantName: merchant,
+      detectedFrom: packageName,
+      detectedAt: DateTime.now(),
+      rawNotificationText: body,
+      description: 'Test Simulation',
     );
-    await _processPaymentNotification(evt);
+
+    await _processTransactionEvent(transaction);
+  }
+
+  // Daily Reminder Logic
+  Future<void> scheduleDailyReminder(int hour, int minute) async {
+    const androidDetails = AndroidNotificationDetails(
+      'daily_reminders',
+      'Daily Reminders',
+      channelDescription: 'Log your expenses daily',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    const details = NotificationDetails(android: androidDetails);
+
+    // Schedule for everyday at the specific time
+    await _localNotifications.zonedSchedule(
+      0,
+      'Daily Expense Check',
+      'Don\'t forget to log your expenses for today!',
+      _nextInstanceOfTime(hour, minute),
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.time,
+    );
+    debugPrint('Daily reminder scheduled for $hour:$minute');
+  }
+
+  Future<void> testDailyReminder() async {
+    const androidDetails = AndroidNotificationDetails(
+      'daily_reminders',
+      'Daily Reminders',
+      importance: Importance.max,
+      priority: Priority.high,
+    );
+
+    await _localNotifications.show(
+      999,
+      'Test Reminder',
+      'This is what your daily expense reminder looks like!',
+      const NotificationDetails(android: androidDetails),
+    );
+  }
+
+  tz.TZDateTime _nextInstanceOfTime(int hour, int minute) {
+    final tz.TZDateTime now = tz.TZDateTime.now(tz.local);
+    tz.TZDateTime scheduledDate =
+        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
+    if (scheduledDate.isBefore(now)) {
+      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    }
+    return scheduledDate;
   }
 
   // Request permission for notification listener (User action required)
   Future<void> requestNotificationListenerPermission() async {
     try {
-      await NotificationsListener.openPermissionSettings();
+      await _nativeChannel.openNotificationSettings();
     } catch (e) {
       debugPrint('Error opening settings: $e');
     }

@@ -1028,9 +1028,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                             );
 
                             if (picked != null) {
-                              // We currently support hourly reminders to save resources
                               final formattedTime =
-                                  '${picked.hour.toString().padLeft(2, '0')}:00';
+                                  '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
                               setDialogState(
                                   () => selectedTime = formattedTime);
                             }
@@ -1050,6 +1049,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                           try {
                             await _authService
                                 .updateNotificationTime(selectedTime);
+
+                            // Schedule the actual local notification if enabled
+                            if (daily) {
+                              final parts = selectedTime.split(':');
+                              final hour = int.parse(parts[0]);
+                              final minute = int.parse(parts[1]);
+                              await NotificationService()
+                                  .scheduleDailyReminder(hour, minute);
+                            }
+
                             if (context.mounted) {
                               Navigator.pop(context);
                               _loadUserData(); // Refresh local user data
@@ -1129,13 +1138,13 @@ class _ProfileScreenState extends State<ProfileScreen>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Simulate Payment App',
+              'Notification Simulation',
               style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
             const VSpace.md(),
             const Text(
-              'This triggers the exact same logic that runs when a real notification arrives.',
+              'Test various notification-triggered features manually.',
               textAlign: TextAlign.center,
             ),
             const VSpace.xl(),
@@ -1143,14 +1152,9 @@ class _ProfileScreenState extends State<ProfileScreen>
               text: 'Simulate GPay: ₹500 to Swiggy',
               onPressed: () {
                 Navigator.pop(context);
-                final service = NotificationService();
-                service.testTransaction(
+                NotificationService().testTransaction(
                   'com.google.android.apps.nbu.paisa.user',
                   'Paid ₹500 to Swiggy',
-                );
-                showDesignSystemSnackBar(
-                  context: context,
-                  message: 'Simulated GPay Notification Triggered',
                 );
               },
             ),
@@ -1163,10 +1167,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                   'com.phonepe.app',
                   'Paid ₹1,200 to Zomato',
                 );
-                showDesignSystemSnackBar(
-                  context: context,
-                  message: 'Simulated PhonePe Notification Triggered',
-                );
+              },
+            ),
+            const VSpace.md(),
+            SecondaryButton(
+              text: 'Test Daily Reminder Notification',
+              onPressed: () {
+                Navigator.pop(context);
+                NotificationService().testDailyReminder();
               },
             ),
           ],

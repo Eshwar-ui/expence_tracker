@@ -29,6 +29,7 @@ class _VideoSplashScreenState extends State<VideoSplashScreen> {
 
     try {
       await _controller.initialize();
+      await _controller.setVolume(0.0); // Mute the video
       if (mounted) {
         setState(() {
           _isInitialized = true;

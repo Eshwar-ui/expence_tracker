@@ -210,6 +210,17 @@ app.get('/', (req, res) => {
   res.send('Expense Tracker Notification Server is Running 🚀');
 });
 
+// Ping endpoint for keep-alive services
+app.get('/ping', (req, res) => {
+  console.log(`[${new Date().toISOString()}] 💓 Keep-alive ping received.`);
+  res.status(200).json({ status: 'alive', timestamp: new Date().toISOString() });
+});
+
+// Periodic internal log to keep the console active
+setInterval(() => {
+  console.log(`[${new Date().toISOString()}] Health Check: Server is active and listening for Firestore events.`);
+}, 10 * 60 * 1000); // Every 10 minutes
+
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
