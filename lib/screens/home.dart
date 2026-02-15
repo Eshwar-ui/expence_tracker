@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/models/analytics.dart';
-import 'package:expence_tracker/screens/scan_screen.dart';
+
 import 'package:expence_tracker/screens/scan_upi_screen.dart';
 import 'package:expence_tracker/services/analytics_service.dart';
 import 'package:expence_tracker/services/recurring_transaction_service.dart';
@@ -233,9 +233,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(AppDesignSystem.s24),
         decoration: BoxDecoration(
           color: isDark ? null : Colors.white,
-          gradient: isDark
-              ? AppDesignSystem.primaryGradient.withOpacity(0.1)
-              : null,
+          gradient:
+              isDark ? AppDesignSystem.primaryGradient.withOpacity(0.1) : null,
           border: isDark
               ? null
               : Border.all(
@@ -313,12 +312,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        _buildActionItem(Icons.qr_code_scanner_rounded, 'Scan', () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ScanScreen()),
-          );
-        }),
         _buildActionItem(Icons.add_rounded, 'Add', () {
           showModalBottomSheet(
             context: context,
