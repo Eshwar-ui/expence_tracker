@@ -46,6 +46,8 @@ app.*.map.json
 
 # Environment variables (contains API keys)
 .env
+.env.*
+!.env.example
 
 # Keystore files (contains signing keys and passwords)
 *.jks
@@ -53,3 +55,15 @@ app.*.map.json
 android/key.properties
 serviceAccountKey.json
 **/key.properties
+
+# Firebase config (contains API keys & OAuth client IDs)
+**/google-services.json
+**/GoogleService-Info.plist
+firebase-debug.log
+.firebase/
+
+# Debug artifacts
+crash_log.txt
+key_debug.txt
+keytool_output.txt
+pub_get_output.txt

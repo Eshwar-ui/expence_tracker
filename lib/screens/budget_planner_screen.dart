@@ -46,7 +46,6 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Scaffold(
       appBar: PremiumAppBar(
         title: 'Budget Planner',
@@ -140,7 +139,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
               color: spent > total
                   ? AppDesignSystem.error
                   : AppDesignSystem.brandPrimary,
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: Colors.white.withValues(alpha: 0.1),
             ),
           ),
         ],
@@ -200,7 +199,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
     return Container(
       padding: const EdgeInsets.all(AppDesignSystem.s16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(AppDesignSystem.r16),
       ),
       child: Column(
@@ -279,7 +278,7 @@ class _BudgetPlannerScreenState extends State<BudgetPlannerScreen> {
                       color: b.spent > b.limit
                           ? AppDesignSystem.error
                           : AppDesignSystem.brandSecondary,
-                      backgroundColor: Colors.white.withOpacity(0.05),
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
                     ),
                   ),
                 ],
@@ -407,59 +406,69 @@ class _BudgetDialogState extends State<_BudgetDialog> {
   }
 
   Future<void> _delete() async {
-    final confirm = await showDialog<bool>(
+    await showDesignSystemDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Budget?'),
-        content: const Text(
-            'This will remove this budget category and its limit tracking.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete',
-                style: TextStyle(color: AppDesignSystem.error)),
-          ),
-        ],
-      ),
+      title: 'Delete Budget?',
+      message:
+          'This will remove this budget category and its limit tracking.',
+      confirmLabel: 'Delete',
+      destructive: true,
+      onConfirm: () async {
+        if (!mounted) return;
+        setState(() => _loading = true);
+        try {
+          await widget.budgetService.deleteBudget(widget.budget!.id);
+          widget.onSaved();
+          if (mounted) Navigator.pop(context);
+        } finally {
+          if (mounted) setState(() => _loading = false);
+        }
+      },
     );
-
-    if (confirm == true) {
-      setState(() => _loading = true);
-      try {
-        await widget.budgetService.deleteBudget(widget.budget!.id);
-        widget.onSaved();
-        Navigator.pop(context);
-      } finally {
-        setState(() => _loading = false);
-      }
-    }
   }
 
   Future<void> _save() async {
-    if (_catCtrl.text.isEmpty || _limCtrl.text.isEmpty) return;
+    final cat = _catCtrl.text.trim();
+    final limText = _limCtrl.text.trim();
+    if (cat.isEmpty) {
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Pick a category for this budget.',
+        isError: true,
+      );
+      return;
+    }
+    final lim = double.tryParse(limText);
+    if (lim == null || lim <= 0) {
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Enter a monthly limit greater than zero.',
+        isError: true,
+      );
+      return;
+    }
     setState(() => _loading = true);
     try {
       final budget = Budget(
         id: widget.budget?.id ?? widget.budgetService.generateId(),
         userId: FirebaseAuth.instance.currentUser!.uid,
-        category: _catCtrl.text,
-        limit: double.parse(_limCtrl.text),
+        category: cat,
+        limit: lim,
         spent: widget.budget?.spent ?? 0.0,
         frequency: BudgetFrequency.monthly,
         createdAt: widget.budget?.createdAt ?? DateTime.now(),
         updatedAt: DateTime.now(),
       );
-      if (widget.budget == null)
+      if (widget.budget == null) {
         await widget.budgetService.createBudget(budget);
-      else
+      } else {
         await widget.budgetService.updateBudget(budget);
+      }
       widget.onSaved();
+      if (!mounted) return;
       Navigator.pop(context);
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 }
@@ -552,9 +561,10 @@ class _BudgetPlanDialogState extends State<_BudgetPlanDialog> {
       );
       await widget.budgetService.saveBudgetPlan(plan);
       widget.onSaved();
+      if (!mounted) return;
       Navigator.pop(context);
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 }

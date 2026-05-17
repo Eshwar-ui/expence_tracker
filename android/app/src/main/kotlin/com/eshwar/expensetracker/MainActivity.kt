@@ -36,9 +36,8 @@ class MainActivity : FlutterFragmentActivity() {
             val darkName = ComponentName(packageName, "$packageName.MainActivityDark")
 
             if (packageManager.getComponentEnabledSetting(lightName) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                // Enable Light
+                // Enable Light alias as the single launcher entry; disable main and dark so only one icon shows.
                 packageManager.setComponentEnabledSetting(lightName, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
-                // Disable Others
                 packageManager.setComponentEnabledSetting(mainName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
                 packageManager.setComponentEnabledSetting(darkName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
             }
@@ -55,9 +54,8 @@ class MainActivity : FlutterFragmentActivity() {
             val darkName = ComponentName(packageName, "$packageName.MainActivityDark")
 
             if (packageManager.getComponentEnabledSetting(darkName) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                // Enable Dark
+                // Enable Dark alias as the single launcher entry; disable main and light so only one icon shows.
                 packageManager.setComponentEnabledSetting(darkName, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
-                // Disable Others
                 packageManager.setComponentEnabledSetting(mainName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
                 packageManager.setComponentEnabledSetting(lightName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
             }

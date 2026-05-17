@@ -19,6 +19,7 @@ class FirestoreService {
 
   // Add a new expense to Firestore
   Future<void> addExpense(Expense expense) async {
+    _assertValid(expense);
     try {
       await _expensesCollection.doc(expense.id).set(expense.toJson());
     } catch (e) {
@@ -26,11 +27,31 @@ class FirestoreService {
     }
   }
 
-  // Get all expenses from Firestore
-  Future<List<Expense>> getExpenses() async {
+  void _assertValid(Expense expense) {
+    if (expense.amount <= 0) {
+      throw ArgumentError('Expense amount must be positive');
+    }
+    if (expense.amount >= 100000000) {
+      throw ArgumentError('Expense amount is unreasonably large');
+    }
+    if (expense.category.trim().isEmpty) {
+      throw ArgumentError('Expense category is required');
+    }
+    if (expense.date.isAfter(DateTime.now().add(const Duration(days: 1)))) {
+      throw ArgumentError('Expense date cannot be in the future');
+    }
+  }
+
+  // Get expenses from Firestore, newest first.
+  //
+  // `limit` caps the number of documents fetched per call. A bounded default
+  // (1000) prevents accidental whole-collection reads on long-running accounts.
+  // Pass `limit: null` only when a caller genuinely needs every record.
+  Future<List<Expense>> getExpenses({int? limit = 1000}) async {
     try {
-      final snapshot =
-          await _expensesCollection.orderBy('date', descending: true).get();
+      Query query = _expensesCollection.orderBy('date', descending: true);
+      if (limit != null) query = query.limit(limit);
+      final snapshot = await query.get();
 
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -43,6 +64,7 @@ class FirestoreService {
 
   // Update an existing expense
   Future<void> updateExpense(Expense expense) async {
+    _assertValid(expense);
     try {
       await _expensesCollection.doc(expense.id).update(expense.toJson());
     } catch (e) {
@@ -101,7 +123,7 @@ class FirestoreService {
   Future<double> getTotalAmount() async {
     try {
       final expenses = await getExpenses();
-      return expenses.fold<double>(0.0, (sum, expense) => sum + expense.amount);
+      return expenses.fold<double>(0.0, (acc, expense) => acc + expense.amount);
     } catch (e) {
       throw Exception('Failed to calculate total amount: $e');
     }
@@ -111,7 +133,7 @@ class FirestoreService {
   Future<double> getTotalAmountByCategory(String category) async {
     try {
       final expenses = await getExpensesByCategory(category);
-      return expenses.fold<double>(0.0, (sum, expense) => sum + expense.amount);
+      return expenses.fold<double>(0.0, (acc, expense) => acc + expense.amount);
     } catch (e) {
       throw Exception('Failed to calculate total amount by category: $e');
     }
@@ -193,7 +215,7 @@ class FirestoreService {
       return {
         'totalAmount': expenses.fold<double>(
           0.0,
-          (sum, expense) => sum + expense.amount,
+          (acc, expense) => acc + expense.amount,
         ),
         'totalCount': expenses.length,
         'categoryBreakdown': categoryBreakdown,

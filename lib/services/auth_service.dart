@@ -1,12 +1,25 @@
-import 'package:expence_tracker/services/notification_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/app_user.dart';
 
 class AuthService {
+  static const List<String> _userSubcollections = [
+    'expenses',
+    'budgets',
+    'budget_plans',
+    'categories',
+    'pending_transactions',
+    'recurring_transactions',
+  ];
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId:
+        '392502074075-sof9e9mgepvqr59boat4mrbgbd6fgfql.apps.googleusercontent.com',
+  );
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Get current user
@@ -44,13 +57,15 @@ class AuthService {
       }
     } catch (e) {
       // Log error but don't throw - user can still use the app
-      print('Error storing user in Firestore: $e');
+      debugPrint('Error storing user in Firestore: $e');
     }
   }
 
   // Sign in with Google
   Future<UserCredential?> signInWithGoogle() async {
     try {
+      await _googleSignIn.signOut();
+
       // Trigger the authentication flow
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
 
@@ -61,6 +76,12 @@ class AuthService {
       // Obtain the auth details from the request
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
+
+      if (googleAuth.idToken == null) {
+        throw Exception(
+          'Google Sign-In did not return an ID token. Check Firebase OAuth client setup and google-services.json.',
+        );
+      }
 
       // Create a new credential
       final credential = GoogleAuthProvider.credential(
@@ -74,10 +95,14 @@ class AuthService {
       // Store user details in Firestore
       if (userCredential.user != null) {
         await _storeUserInFirestore(userCredential.user!);
-        await NotificationService().registerToken();
       }
 
       return userCredential;
+    } on FirebaseAuthException catch (e) {
+      throw Exception('Google sign-in failed (${e.code}): ${e.message ?? e}');
+    } on PlatformException catch (e) {
+      throw Exception(
+          'Google sign-in platform error (${e.code}): ${e.message ?? e}');
     } catch (e) {
       throw Exception('Google sign-in failed: $e');
     }
@@ -139,9 +164,6 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     try {
-      // Unregister FCM token before signing out
-      await NotificationService().unregisterToken();
-
       await Future.wait([_auth.signOut(), _googleSignIn.signOut()]);
     } catch (e) {
       throw Exception('Sign out failed: $e');
@@ -153,12 +175,34 @@ class AuthService {
     try {
       final uid = currentUser?.uid;
       if (uid != null) {
-        // Delete user document from Firestore
-        await _firestore.collection('users').doc(uid).delete();
+        final userDoc = _firestore.collection('users').doc(uid);
+        await _deleteUserData(userDoc);
+        await userDoc.delete();
       }
       await currentUser?.delete();
     } catch (e) {
       throw Exception('Account deletion failed: $e');
+    }
+  }
+
+  Future<void> _deleteUserData(DocumentReference<Map<String, dynamic>> userDoc) async {
+    for (final collectionName in _userSubcollections) {
+      await _deleteCollection(userDoc.collection(collectionName));
+    }
+  }
+
+  Future<void> _deleteCollection(CollectionReference collection) async {
+    while (true) {
+      final snapshot = await collection.limit(100).get();
+      if (snapshot.docs.isEmpty) {
+        return;
+      }
+
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
   }
 
@@ -203,7 +247,7 @@ class AuthService {
       }
       return null;
     } catch (e) {
-      print('Error getting user from Firestore: $e');
+      debugPrint('Error getting user from Firestore: $e');
       return null;
     }
   }

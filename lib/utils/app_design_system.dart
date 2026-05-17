@@ -171,12 +171,12 @@ class AppDesignSystem {
 
   static List<BoxShadow> softShadow(Color color) => [
         BoxShadow(
-          color: color.withOpacity(0.04),
+          color: color.withValues(alpha: 0.04),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
         BoxShadow(
-          color: color.withOpacity(0.04),
+          color: color.withValues(alpha: 0.04),
           blurRadius: 20,
           offset: const Offset(0, 10),
         ),
@@ -207,8 +207,6 @@ class AppDesignSystem {
         onSecondary: Colors.white,
         error: error,
         onError: Colors.white,
-        background: background,
-        onBackground: isDark ? darkTextHigh : textHigh,
         surface: canvas,
         onSurface: isDark ? darkTextHigh : textHigh,
         outline: isDark ? darkBorder : lightBorder,
@@ -221,7 +219,7 @@ class AppDesignSystem {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(r16),
           side: BorderSide(
-            color: (isDark ? darkBorder : lightBorder).withOpacity(0.5),
+            color: (isDark ? darkBorder : lightBorder).withValues(alpha: 0.5),
             width: 1,
           ),
         ),
@@ -285,7 +283,7 @@ class AppDesignSystem {
   );
   static final List<BoxShadow> shadowMD = [
     BoxShadow(
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       blurRadius: 10,
       offset: const Offset(0, 4),
     ),

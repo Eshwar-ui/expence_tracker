@@ -1,76 +1,119 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if user is authenticated
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user owns the resource
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper function to check if document belongs to current user via field
     function belongsToUser(data) {
       return isAuthenticated() && data.userId == request.auth.uid;
     }
-    
+
+    // Validate expense / income document shape
+    function isValidExpense(data) {
+      return data.userId == request.auth.uid
+          && data.amount is number
+          && data.amount > 0
+          && data.amount < 100000000
+          && data.category is string
+          && data.category.size() > 0
+          && data.category.size() < 100;
+    }
+
+    function isValidBudget(data) {
+      return data.userId == request.auth.uid
+          && data.limit is number
+          && data.limit >= 0
+          && data.category is string
+          && data.category.size() > 0;
+    }
+
     // ============================================================
-    // USERS COLLECTION
+    // USERS COLLECTION (current data layout)
     // ============================================================
-    // Users can only read/write their own user document and all subcollections
     match /users/{userId} {
       allow read, write: if isOwner(userId);
-      
-      // Catch-all: Allow access to ALL subcollections for the owner
-      // This prevents future "PERMISSION_DENIED" errors when new features are added
-      match /{subcollection}/{docId} {
+
+      // Each subcollection is listed explicitly. No catch-all.
+      match /expenses/{expenseId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidExpense(request.resource.data);
+      }
+
+      match /budgets/{budgetId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidBudget(request.resource.data);
+      }
+
+      match /budget_plans/{planId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /recurring_transactions/{transactionId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /categories/{categoryId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /pending_transactions/{pendingId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /fcm_tokens/{tokenId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /analytics/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /notifications/{notificationId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /settings/{settingId} {
         allow read, write: if isOwner(userId);
       }
     }
-    
+
     // ============================================================
-    // LEGACY: ROOT-LEVEL COLLECTIONS (for backward compatibility)
+    // LEGACY ROOT-LEVEL COLLECTIONS (kept for backward compatibility)
     // ============================================================
-    // These can be removed once all data is migrated to subcollections
-    
-    // Budgets at root level (legacy)
+
     match /budgets/{budgetId} {
       allow read: if belongsToUser(resource.data);
-      allow create: if belongsToUser(request.resource.data);
-      allow update: if belongsToUser(resource.data) && belongsToUser(request.resource.data);
+      allow create: if belongsToUser(request.resource.data) && isValidBudget(request.resource.data);
+      allow update: if belongsToUser(resource.data) && isValidBudget(request.resource.data);
       allow delete: if belongsToUser(resource.data);
     }
-    
-    // Budget plans at root level (legacy)
+
     match /budget_plans/{planId} {
       allow read: if belongsToUser(resource.data);
       allow create: if belongsToUser(request.resource.data);
       allow update: if belongsToUser(resource.data) && belongsToUser(request.resource.data);
       allow delete: if belongsToUser(resource.data);
     }
-    
-    // Recurring transactions at root level (legacy)
+
     match /recurring_transactions/{transactionId} {
       allow read: if belongsToUser(resource.data);
       allow create: if belongsToUser(request.resource.data);
       allow update: if belongsToUser(resource.data) && belongsToUser(request.resource.data);
       allow delete: if belongsToUser(resource.data);
     }
-    
-    // Expenses at root level (legacy)
+
     match /expenses/{expenseId} {
-      allow read: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid &&
-        request.resource.data.userId == request.auth.uid;
-      allow delete: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && 
-        request.resource.data.userId == request.auth.uid;
+      allow read, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && isValidExpense(request.resource.data);
+      allow update: if isAuthenticated()
+        && resource.data.userId == request.auth.uid
+        && isValidExpense(request.resource.data);
     }
   }
 }

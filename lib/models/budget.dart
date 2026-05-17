@@ -122,8 +122,8 @@ class BudgetPlan {
   });
 
   double get totalBudgeted =>
-      budgets.fold(0, (sum, budget) => sum + budget.limit);
-  double get totalSpent => budgets.fold(0, (sum, budget) => sum + budget.spent);
+      budgets.fold(0, (acc, budget) => acc + budget.limit);
+  double get totalSpent => budgets.fold(0, (acc, budget) => acc + budget.spent);
   double get remainingIncome => monthlyIncome - totalSpent;
 
   Map<String, dynamic> toMap() {

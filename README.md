@@ -1,194 +1,135 @@
-# Expense Tracker - Optimized & Production Ready
+# Expense Tracker
 
-## 🎯 Project Overview
-Premium personal finance and expense tracker with smart transaction detection, AI insights, and biometric security.
+Premium personal finance and expense tracker with smart OCR, UPI integration, and biometric security.
 
-## ✨ Key Features
+## Requirements
 
-### 💳 Transaction Management
-- **Smart SMS Detection** - Auto-detect bank transactions from SMS
-- **Smart Notification Access** - Real-time transaction capture from notifications
-- **Manual Entry** - Add transactions with rich categorization
-- **Bulk Import** - Scan and import multiple SMS transactions
-- **Deduplication** - Intelligent duplicate detection
+- Flutter SDK (see `environment.sdk` in `pubspec.yaml`)
+- Firebase project (Auth, Firestore, Messaging, Crashlytics)
+- Android: JDK 11+, Android SDK
+- iOS: Xcode (for iOS/macOS builds)
 
-### 🤖 AI-Powered Insights
-- **Gemini AI Integration** - Free AI-powered spending insights
-- **Category Suggestions** - Auto-suggest categories based on merchant
-- **Spending Predictions** - Forecast future expenses
-- **Anomaly Detection** - Identify unusual spending patterns
+## Setup
 
-### 📊 Analytics & Reports
-- **Visual Charts** - Beautiful spending visualizations
-- **Category Breakdown** - Detailed expense analysis
-- **Budget Tracking** - Set and monitor budgets
-- **Recurring Transactions** - Track subscriptions and bills
+### 1. Clone and install dependencies
 
-### 🔒 Security
-- **Biometric Lock** - Fingerprint/Face ID protection
-- **Firebase Authentication** - Secure Google Sign-In
-- **Local Encryption** - Sensitive data protection
-
-### 💰 Payment Integration
-- **UPI Support** - Integrated UPI payment flows
-- **QR Code Scanner** - Quick payment scanning
-
-## 🏗️ Architecture
-
-### Clean Architecture
-```
-lib/
-├── models/          # Data models & entities
-├── screens/         # UI layer
-├── services/        # Business logic
-├── utils/           # Utilities & helpers
-└── widgets/         # Reusable components
-```
-
-### Key Services
-- **FirestoreService** - Cloud data sync
-- **SMSService** - SMS transaction parsing
-- **NotificationService** - Real-time notification capture
-- **GeminiAIService** - AI insights generation
-- **SecurityService** - Biometric authentication
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Flutter SDK 3.5.0+
-- Firebase project setup
-- Gemini API key (optional, for AI features)
-
-### Installation
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-
-# Install dependencies
+git clone <repo-url>
+cd expence_tracker
 flutter pub get
+```
 
-# Configure Firebase
-# Add google-services.json (Android)
-# Add GoogleService-Info.plist (iOS)
+### 2. Firebase
 
-# Create .env file
-cp .env.example .env
-# Add your GEMINI_API_KEY
+- Create a Firebase project at [Firebase Console](https://console.firebase.google.com).
+- Enable **Authentication** (e.g. Email/Password, Google), **Firestore**, **Cloud Messaging**, and **Crashlytics**.
+- Run **FlutterFire CLI** to link the app and regenerate options:
 
-# Run the app
+  ```bash
+  dart pub global activate flutterfire_cli
+  flutterfire configure
+  ```
+
+- This updates `lib/firebase_options.dart` and adds/updates `android/app/google-services.json` and iOS config. Do not commit `google-services.json` if it contains secrets; the generated `firebase_options.dart` is typically safe to commit for client apps.
+
+### 3. Environment variables (`.env`)
+
+The app can use a `.env` file for optional config (e.g. API keys). A template:
+
+```bash
+# .env (create from this; do not commit real secrets)
+# KEY=value
+```
+
+- Create `.env` in the project root if needed.
+- `.env` is listed under `flutter.assets` and is in `.gitignore`; keep secrets out of version control.
+
+### 4. Android release signing (`key.properties`)
+
+For release builds (Play Store or local APK/App Bundle), configure signing:
+
+1. Create a keystore (if you don’t have one):
+
+   ```bash
+   keytool -genkey -v -keystore android/app/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+   ```
+
+2. Create `android/key.properties` (this file is gitignored):
+
+   ```properties
+   storePassword=<your-keystore-password>
+   keyPassword=<your-key-password>
+   keyAlias=upload
+   storeFile=upload-keystore.jks
+   ```
+
+   Use a path relative to `android/` (e.g. `storeFile=upload-keystore.jks` if the JKS is in `android/app/` then set `storeFile=app/upload-keystore.jks`), or an absolute path.
+
+3. Do not commit `key.properties` or `.jks` files.
+
+Without a valid `key.properties` and keystore, the **release** build will fail with a Gradle error (by design).
+
+## Running the app
+
+```bash
 flutter run
 ```
 
-## 📱 Permissions Required
+For a specific device:
+
+```bash
+flutter devices
+flutter run -d <device-id>
+```
+
+## Building for production
 
 ### Android
-- `READ_SMS` - Read bank transaction messages
-- `RECEIVE_SMS` - Receive new transaction alerts
-- `BIND_NOTIFICATION_LISTENER_SERVICE` - Access notifications
-- `USE_BIOMETRIC` - Biometric authentication
-- `INTERNET` - Firebase sync
+
+- **App Bundle (recommended for Play Store):**
+
+  ```bash
+  flutter build appbundle
+  ```
+
+  Output: `build/app/outputs/bundle/release/app-release.aab`
+
+- **APK:**
+
+  ```bash
+  flutter build apk --release
+  ```
+
+  Output: `build/app/outputs/flutter-apk/app-release.apk`
+
+Release builds use ProGuard/R8 (minify + shrink) and require a configured signing key (see **Android release signing** above).
 
 ### iOS
-- Notification access
-- Biometric authentication (Face ID/Touch ID)
 
-## 🎨 Design System
-- **Material Design 3** - Modern UI components
-- **Dark Mode** - Full dark theme support
-- **Glassmorphism** - Premium glass effects
-- **Animations** - Smooth micro-interactions
-- **Custom Color Palette** - Brand-consistent colors
-
-## 🔧 Configuration
-
-### Firebase Setup
-1. Create Firebase project
-2. Enable Authentication (Google Sign-In)
-3. Enable Firestore Database
-4. Download configuration files
-5. Add to project
-
-### Gemini AI Setup (Optional)
-1. Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Add to `.env` file: `GEMINI_API_KEY=your_key_here`
-
-## 📦 Dependencies
-
-### Core
-- `firebase_core` - Firebase initialization
-- `firebase_auth` - Authentication
-- `cloud_firestore` - Database
-- `shared_preferences` - Local storage
-
-### Features
-- `another_telephony` - SMS reading
-- `flutter_notification_listener` - Notification access
-- `local_auth` - Biometric authentication
-- `fl_chart` - Charts & graphs
-- `mobile_scanner` - QR code scanning
-
-### AI & Networking
-- `http` - API calls
-- `flutter_dotenv` - Environment variables
-
-## 🧪 Testing
 ```bash
-# Run tests
+flutter build ios
+```
+
+Then open `ios/Runner.xcworkspace` in Xcode, select signing team and device/simulator, and archive/export as needed.
+
+## Tests
+
+```bash
 flutter test
-
-# Run with coverage
-flutter test --coverage
 ```
 
-## 📦 Build
+- Unit tests: e.g. `test/notification_parsing_test.dart`, `test/notification_validation_test.dart`
+- Widget test: `test/widget_test.dart` (app load smoke test)
 
-### Android
-```bash
-# Debug build
-flutter build apk --debug
+## Notification listener (Android)
 
-# Release build
-flutter build apk --release
-```
+The app uses notification access to parse transaction notifications (e.g. UPI). Two services are declared:
 
-### iOS
-```bash
-# Debug build
-flutter build ios --debug
+- **flutter_notification_listener** plugin: `NotificationsHandlerService` (from the plugin).
+- **App-specific**: `NotificationCaptureService` (in `android/app/...`).
 
-# Release build
-flutter build ios --release
-```
+Both are bound to the same Notification Listener capability; the app coordinates parsing and deduplication. Users must enable “Notification access” for **Expense Tracker** in system Settings.
 
-## 🎯 Optimization Features
+## License
 
-### Performance
-- ✅ Lazy loading for heavy screens
-- ✅ Efficient state management
-- ✅ Optimized image loading
-- ✅ Minimal rebuilds
-
-### Code Quality
-- ✅ Clean architecture
-- ✅ Centralized utilities
-- ✅ Singleton services
-- ✅ Type-safe models
-
-### Size Optimization
-- ✅ Removed unused assets
-- ✅ Optimized dependencies
-- ✅ Code splitting
-- ✅ Tree shaking enabled
-
-## 📝 License
-This project is licensed under the MIT License.
-
-## 🤝 Contributing
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📧 Support
-For issues and questions, please open an issue on GitHub.
-
----
-
-**Built with ❤️ using Flutter**
+See repository license file.

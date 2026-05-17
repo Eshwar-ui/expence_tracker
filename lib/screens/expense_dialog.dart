@@ -207,11 +207,11 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
             ? 'Transaction updated!'
             : 'Transaction added!',
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       showDesignSystemSnackBar(
         context: context,
-        message: 'Error: $e',
+        message: "Couldn't save the transaction. Please try again.",
         isError: true,
       );
     } finally {
@@ -303,7 +303,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -327,7 +327,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                   width: 48,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.outline.withOpacity(0.2),
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
@@ -338,7 +338,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppDesignSystem.brandPrimary.withOpacity(0.1),
+                      color: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Icon(
@@ -368,7 +368,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                               ? 'Update your record'
                               : 'Add a manual or SMS record',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurface.withOpacity(0.5),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -390,7 +390,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                   'Quick Add from Auto-Payments',
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface.withOpacity(0.6),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
                 const VSpace.sm(),
@@ -408,11 +408,10 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                           ),
                           label: Text(t.title),
                           backgroundColor:
-                              theme.colorScheme.primary.withOpacity(0.05),
+                              theme.colorScheme.primary.withValues(alpha: 0.05),
                           side: BorderSide(
-                            color: theme.colorScheme.primary.withOpacity(
-                              0.2,
-                            ),
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.2),
                           ),
                           onPressed: () {
                             setState(() {
@@ -453,7 +452,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       onSelected: (val) {
                         if (val) _onTypeChanged(TransactionType.expense);
                       },
-                      selectedColor: AppDesignSystem.error.withOpacity(0.2),
+                      selectedColor: AppDesignSystem.error.withValues(alpha: 0.2),
                     ),
                   ),
                   const HSpace.sm(),
@@ -464,7 +463,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       onSelected: (val) {
                         if (val) _onTypeChanged(TransactionType.income);
                       },
-                      selectedColor: AppDesignSystem.success.withOpacity(0.2),
+                      selectedColor: AppDesignSystem.success.withValues(alpha: 0.2),
                     ),
                   ),
                 ],
@@ -518,7 +517,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                           'Date',
                           style: theme.textTheme.labelMedium?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -532,15 +531,14 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             decoration: BoxDecoration(
                               color: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.black.withOpacity(0.03),
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.03),
                               borderRadius: BorderRadius.circular(
                                 AppDesignSystem.r16,
                               ),
                               border: Border.all(
-                                color: theme.colorScheme.outline.withOpacity(
-                                  0.1,
-                                ),
+                                color: theme.colorScheme.outline
+                                    .withValues(alpha: 0.1),
                               ),
                             ),
                             child: Row(
@@ -576,7 +574,7 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                     'Category',
                     style: theme.textTheme.labelMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: theme.colorScheme.onSurface.withOpacity(0.6),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                   TextButton.icon(
@@ -597,13 +595,13 @@ class _ExpenseDialogState extends State<ExpenseDialog> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.white.withOpacity(0.05)
-                            : Colors.black.withOpacity(0.03),
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.03),
                         borderRadius: BorderRadius.circular(
                           AppDesignSystem.r16,
                         ),
                         border: Border.all(
-                          color: theme.colorScheme.outline.withOpacity(0.1),
+                          color: theme.colorScheme.outline.withValues(alpha: 0.1),
                         ),
                       ),
                       child: DropdownButtonHideUnderline(

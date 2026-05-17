@@ -16,22 +16,18 @@ class GeminiAIService {
 
   final FirestoreService _firestoreService = FirestoreService();
 
+  bool get isConfigured => _apiKey.isNotEmpty;
+
   /// Generate AI insights from expense data
   Future<List<SpendingInsight>> generateInsights(
     List<Expense> expenses,
   ) async {
-    print('🔍 Generating insights for ${expenses.length} expenses');
-
     if (_apiKey.isEmpty) {
-      print('⚠️ Gemini API key not configured in .env file');
-      print('📊 Using fallback insights');
       return _getFallbackInsights(expenses);
     }
 
     try {
-      // Prepare expense summary for AI
       final expenseSummary = _prepareExpenseSummary(expenses);
-      print('📝 Prepared expense summary for AI analysis');
 
       // Create prompt for Gemini
       final prompt = '''
@@ -59,8 +55,6 @@ Focus on:
 5. Budget recommendations
 ''';
 
-      // Call Gemini API
-      print('🌐 Calling Gemini API...');
       final response = await http.post(
         Uri.parse('$_baseUrl?key=$_apiKey'),
         headers: {'Content-Type': 'application/json'},
@@ -82,42 +76,102 @@ Focus on:
       );
 
       if (response.statusCode == 200) {
-        print('✅ Gemini API call successful');
-        final data = jsonDecode(response.body);
-        final text = data['candidates'][0]['content']['parts'][0]['text'];
-        print(
-            '📄 API Response: ${text.substring(0, text.length > 100 ? 100 : text.length)}...');
-
-        // Extract JSON from response
-        final jsonMatch = RegExp(r'\{[\s\S]*\}').firstMatch(text);
-        if (jsonMatch != null) {
-          final insightsJson = jsonDecode(jsonMatch.group(0)!);
-          final insightsList = insightsJson['insights'] as List;
-
-          print('💡 Generated ${insightsList.length} AI insights');
-
-          return insightsList
-              .map((i) => SpendingInsight(
-                    type: i['type'] ?? 'general',
-                    title: i['title'] ?? 'Insight',
-                    message: i['message'] ?? '',
-                    value: (i['value'] as num?)?.toDouble() ?? 0.0,
-                  ))
-              .toList();
-        } else {
-          print('⚠️ Could not extract JSON from API response');
+        final text = _extractTextFromGeminiResponse(response.body);
+        if (text == null || text.isEmpty) {
+          return _getFallbackInsights(expenses);
         }
-      } else {
-        print('❌ Gemini API error: ${response.statusCode}');
-        print('Response: ${response.body}');
+
+        final insightsJson = _extractInsightsJson(text);
+        if (insightsJson == null) {
+          return _getFallbackInsights(expenses);
+        }
+
+        final rawList = insightsJson['insights'];
+        if (rawList is! List) {
+          return _getFallbackInsights(expenses);
+        }
+
+        return rawList
+            .whereType<Map>()
+            .map((i) => SpendingInsight(
+                  type: (i['type'] as String?) ?? 'general',
+                  title: (i['title'] as String?) ?? 'Insight',
+                  message: (i['message'] as String?) ?? '',
+                  value: (i['value'] as num?)?.toDouble() ?? 0.0,
+                ))
+            .toList();
       }
-    } catch (e) {
-      print('❌ Error calling Gemini API: $e');
+    } catch (_) {
+      // Swallow and fall back; never crash the insights screen on AI errors.
     }
 
-    // Fallback to rule-based insights
-    print('📊 Using fallback insights');
     return _getFallbackInsights(expenses);
+  }
+
+  /// Safely walk Gemini's response shape to extract the model text.
+  /// Returns null if any expected field is missing or has the wrong type.
+  String? _extractTextFromGeminiResponse(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is! Map) return null;
+      final candidates = decoded['candidates'];
+      if (candidates is! List || candidates.isEmpty) return null;
+      final content = (candidates.first as Map?)?['content'];
+      if (content is! Map) return null;
+      final parts = content['parts'];
+      if (parts is! List || parts.isEmpty) return null;
+      final text = (parts.first as Map?)?['text'];
+      return text is String ? text : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Find the first balanced JSON object in `text` that contains an
+  /// "insights" key. Falls back to the first balanced object if none match.
+  /// Tolerates markdown code fences and surrounding prose.
+  Map<String, dynamic>? _extractInsightsJson(String text) {
+    Map<String, dynamic>? firstParsed;
+    final length = text.length;
+    for (int i = 0; i < length; i++) {
+      if (text[i] != '{') continue;
+      int depth = 0;
+      bool inString = false;
+      bool escape = false;
+      for (int j = i; j < length; j++) {
+        final ch = text[j];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (ch == r'\') {
+          escape = true;
+          continue;
+        }
+        if (ch == '"') {
+          inString = !inString;
+          continue;
+        }
+        if (inString) continue;
+        if (ch == '{') depth++;
+        if (ch == '}') {
+          depth--;
+          if (depth == 0) {
+            try {
+              final parsed = jsonDecode(text.substring(i, j + 1));
+              if (parsed is Map<String, dynamic>) {
+                firstParsed ??= parsed;
+                if (parsed['insights'] is List) return parsed;
+              }
+            } catch (_) {
+              // Not valid JSON; keep scanning.
+            }
+            break;
+          }
+        }
+      }
+    }
+    return firstParsed;
   }
 
   /// Prepare expense summary for AI analysis
@@ -286,8 +340,7 @@ Focus on:
         predictionDate: now,
         predictionStartDate: now.add(const Duration(days: 1)),
       );
-    } catch (e) {
-      print('Error predicting expenses: $e');
+    } catch (_) {
       return null;
     }
   }

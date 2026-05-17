@@ -130,21 +130,16 @@ class CategoryService {
         return _defaultCategories;
       }
 
-      final result = snapshot.docs.map((doc) {
-        return Category.fromJson(doc.data() as Map<String, dynamic>);
-      }).toList();
-      print('DEBUG: Fetched ${result.length} categories from Firestore');
-      return result;
-    } catch (e) {
-      print('Error fetching categories: $e');
+      return snapshot.docs
+          .map((doc) => Category.fromJson(doc.data() as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
       return _defaultCategories;
     }
   }
 
   Future<void> addCategory(Category category) async {
-    print('DEBUG: Adding category: ${category.name} with ID: ${category.id}');
     await _categoriesCollection.doc(category.id).set(category.toJson());
-    print('DEBUG: Category added successfully');
   }
 
   Future<void> deleteCategory(String id) async {

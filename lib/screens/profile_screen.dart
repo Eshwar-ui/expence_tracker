@@ -1,18 +1,14 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:expence_tracker/services/auth_service.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
+import 'package:expence_tracker/utils/app_constants.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/services/security_service.dart';
 import 'package:expence_tracker/models/app_user.dart';
-import 'package:expence_tracker/services/auto_tracking_settings_service.dart';
-import 'package:expence_tracker/services/notification_listener_channel.dart';
-import 'package:expence_tracker/services/notification_auto_expense_service.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart';
-import 'package:expence_tracker/screens/debug_test_notification_screen.dart';
-import 'package:expence_tracker/services/notification_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -25,23 +21,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final SecurityService _securityService = SecurityService();
-  final AutoTrackingSettingsService _autoTrackingSettings =
-      AutoTrackingSettingsService();
-  final NotificationListenerChannel _notificationChannel =
-      NotificationListenerChannel();
-  final NotificationAutoExpenseService _autoExpenseService =
-      NotificationAutoExpenseService();
   bool _deviceLockEnabled = false;
   Future<AppUser?>? _userFuture;
-  bool _autoTrackingEnabled = false;
-  bool _notificationAccessGranted = true;
-  int _needsReviewCount = 0;
-  bool _autoTrackingLoading = true;
-  bool _undoInProgress = false;
-  bool _permissionRevoked = false;
-  bool _noNotificationsReceived = false;
-  int? _lastNotificationTimestamp;
-  static const int _noNotificationThresholdDays = 7;
 
   @override
   void initState() {
@@ -49,20 +30,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadSecuritySettings();
     _loadUserData();
-    _loadAutoTrackingSettings();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadAutoTrackingSettings();
-    }
   }
 
   void _loadUserData() {
@@ -76,43 +49,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     final enabled = await _securityService.isLockEnabled();
     if (mounted) {
       setState(() => _deviceLockEnabled = enabled);
-    }
-  }
-
-  Future<void> _loadAutoTrackingSettings() async {
-    try {
-      final previousGranted = _notificationAccessGranted;
-      final enabled = await _autoTrackingSettings.isEnabled();
-      final reviewCount = await _autoTrackingSettings.getNeedsReviewCount();
-      final permissionGranted = await _notificationChannel.isListenerEnabled();
-      final lastNotification = await _notificationChannel.getLastNotification();
-      final lastTimestamp = lastNotification?.timestamp;
-      final noNotifications = _isNoNotifications(lastTimestamp);
-      if (mounted) {
-        setState(() {
-          _autoTrackingEnabled = enabled;
-          _needsReviewCount = reviewCount;
-          _notificationAccessGranted = permissionGranted;
-          _permissionRevoked = previousGranted && !permissionGranted;
-          _lastNotificationTimestamp = lastTimestamp;
-          _noNotificationsReceived = noNotifications;
-          _autoTrackingLoading = false;
-        });
-      }
-      _logAutoTrackingHealth(
-        permissionGranted: permissionGranted,
-        lastTimestamp: lastTimestamp,
-        noNotifications: noNotifications,
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _autoTrackingLoading = false;
-          _notificationAccessGranted = false;
-          _permissionRevoked = true;
-        });
-      }
-      _logAutoTrackingError(e);
     }
   }
 
@@ -141,7 +77,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: theme.colorScheme.primary.withOpacity(0.15),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
                 ),
               ),
             ),
@@ -156,7 +92,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 height: 400,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: theme.colorScheme.secondary.withOpacity(0.1),
+                  color: theme.colorScheme.secondary.withValues(alpha: 0.1),
                 ),
               ),
             ),
@@ -183,12 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                   _buildSettingsSection(),
                   const VSpace.xl(),
 
-                  // Auto-Tracking
-                  _buildSectionTitle('Auto-Tracking'),
-                  const VSpace.sm(),
-                  _buildAutoTrackingSection(),
-                  const VSpace.xl(),
-
                   // Account Actions
                   _buildSectionTitle('Account'),
                   const VSpace.sm(),
@@ -203,54 +133,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                   ),
                   const VSpace.md(),
                   Text(
-                    'Version 2.1.0 (Premium)',
+                    kAppVersionLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.4),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
                       letterSpacing: 1.1,
-                    ),
-                  ),
-                  if (kDebugMode)
-                    GestureDetector(
-                      onLongPress: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const DebugTestNotificationScreen(),
-                          ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Developer Options',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.primary.withOpacity(0.6),
-                            letterSpacing: 1.0,
-                          ),
-                        ),
-                      ),
-                    ),
-                  // Simulation (Test Only)
-                  _buildSectionTitle('Simulation'),
-                  const VSpace.sm(),
-                  DesignSystemCard(
-                    glass: true,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading:
-                              _iconBox(Icons.bug_report_rounded, Colors.purple),
-                          title: Text(
-                            'Visual Test',
-                            style: theme.textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          subtitle: const Text(
-                              'Simulate incoming payment notification'),
-                          onTap: _showSimulationDialog,
-                        ),
-                      ],
                     ),
                   ),
 
@@ -285,6 +171,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     final theme = Theme.of(context);
     final photoURL = user?.photoURL;
     return DesignSystemCard(
+      margin: EdgeInsets.zero,
       glass: true,
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -295,13 +182,13 @@ class _ProfileScreenState extends State<ProfileScreen>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: theme.colorScheme.primary.withOpacity(0.2),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.2),
                     width: 3,
                   ),
                 ),
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                   backgroundImage:
                       photoURL != null ? NetworkImage(photoURL) : null,
                   child: photoURL == null
@@ -338,7 +225,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           Text(
             user?.email ?? 'no-email@example.com',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withOpacity(0.6),
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
           const VSpace.md(),
@@ -346,16 +233,38 @@ class _ProfileScreenState extends State<ProfileScreen>
             future: _userFuture,
             builder: (context, snapshot) {
               final appUser = snapshot.data;
-              if (appUser != null) {
-                final date = DateFormat('MMMM yyyy').format(appUser.createdAt);
-                return DesignSystemBadge(
-                  text: 'Gold Member since $date',
-                  color: AppDesignSystem.brandAccent,
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const SizedBox.shrink();
+              }
+
+              if (appUser == null) {
+                return Text(
+                  'Your account details are synced securely.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                  textAlign: TextAlign.center,
                 );
               }
-              return const DesignSystemBadge(
-                text: 'Premium Member',
-                color: AppDesignSystem.brandPrimary,
+
+              final date = DateFormat('MMMM yyyy').format(appUser.createdAt);
+              return Column(
+                children: [
+                  Text(
+                    'Joined $date',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const VSpace.xs(),
+                  Text(
+                    'Your account details are synced securely.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               );
             },
           ),
@@ -390,13 +299,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             subtitle: 'Customise your labels',
             onTap: () => Navigator.pushNamed(context, '/categories'),
           ),
-          _divider(),
-          _buildActionTile(
-            icon: Icons.bar_chart_rounded,
-            title: 'Detailed Reports',
-            subtitle: 'Analytics and trends',
-            onTap: () => Navigator.pushNamed(context, '/reports'),
-          ),
         ],
       ),
     );
@@ -408,13 +310,6 @@ class _ProfileScreenState extends State<ProfileScreen>
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          _buildActionTile(
-            icon: Icons.notifications_active_rounded,
-            title: 'Notifications',
-            subtitle: 'Alerts and reminders',
-            onTap: () => _showNotificationsDialog(context),
-          ),
-          _divider(),
           _buildActionTile(
             icon: Icons.security_rounded,
             title: 'Security',
@@ -441,20 +336,20 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 Switch.adaptive(
                   value: _deviceLockEnabled,
-                  activeColor: Theme.of(context).colorScheme.primary,
+                  activeTrackColor: Theme.of(context).colorScheme.primary,
                   onChanged: (value) async {
                     final canAuth = await _securityService.canAuthenticate();
+                    if (!mounted) return;
                     if (canAuth) {
                       await _securityService.setLockEnabled(value);
+                      if (!mounted) return;
                       setState(() => _deviceLockEnabled = value);
-                    } else {
-                      if (context.mounted) {
-                        showDesignSystemSnackBar(
-                          context: context,
-                          message: 'Biometrics not available',
-                          isError: true,
-                        );
-                      }
+                    } else if (context.mounted) {
+                      showDesignSystemSnackBar(
+                        context: context,
+                        message: 'Biometrics not available',
+                        isError: true,
+                      );
                     }
                   },
                 ),
@@ -463,264 +358,6 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildAutoTrackingSection() {
-    final theme = Theme.of(context);
-
-    return DesignSystemCard(
-      glass: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: _iconBox(Icons.auto_awesome_rounded,
-                _autoTrackingEnabled ? AppDesignSystem.brandPrimary : null),
-            title: Text(
-              _autoTrackingEnabled
-                  ? 'Auto-tracking is ON'
-                  : 'Auto-tracking is OFF',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            subtitle: Text(
-              'Auto-tracked',
-              style: theme.textTheme.bodySmall,
-            ),
-            trailing: Switch.adaptive(
-              value: _autoTrackingEnabled,
-              activeColor: theme.colorScheme.primary,
-              onChanged: _autoTrackingLoading
-                  ? null
-                  : (value) async {
-                      if (value && !_notificationAccessGranted) {
-                        _showPermissionDialog();
-                        return;
-                      }
-                      await _autoTrackingSettings.setEnabled(value);
-                      if (mounted) {
-                        setState(() => _autoTrackingEnabled = value);
-                      }
-                    },
-            ),
-          ),
-          if (!_notificationAccessGranted) ...[
-            const VSpace.sm(),
-            _buildPermissionMissingCard(),
-          ],
-          if (_permissionRevoked && _notificationAccessGranted == false) ...[
-            const VSpace.sm(),
-            _buildRecoveryInstructions(
-              title: 'Permission revoked',
-              message:
-                  'Auto-tracking is paused. Re-enable Notification Access to continue.',
-            ),
-          ],
-          if (_notificationAccessGranted && _noNotificationsReceived) ...[
-            const VSpace.sm(),
-            _buildRecoveryInstructions(
-              title: 'No notifications received',
-              message:
-                  'We haven\'t seen any transaction alerts yet. Make sure your bank apps have notifications turned on.',
-            ),
-          ],
-          const VSpace.sm(),
-          _buildNeedsReviewRow(),
-          const VSpace.sm(),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _needsReviewCount > 0
-                      ? () => Navigator.pushNamed(context, '/scan')
-                      : null,
-                  child: const Text('Edit'),
-                ),
-              ),
-              const HSpace.md(),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _undoInProgress
-                      ? null
-                      : () async {
-                          setState(() => _undoInProgress = true);
-                          final result =
-                              await _autoExpenseService.undoLastAutoInsert();
-                          if (mounted) {
-                            setState(() => _undoInProgress = false);
-                            showDesignSystemSnackBar(
-                              context: context,
-                              message: result.success
-                                  ? 'Last auto-tracked entry removed'
-                                  : 'Nothing to undo',
-                              isError: !result.success,
-                            );
-                          }
-                        },
-                  child: const Text('Undo'),
-                ),
-              ),
-              const HSpace.md(),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _autoTrackingEnabled
-                      ? () async {
-                          await _autoTrackingSettings.setEnabled(false);
-                          if (mounted) {
-                            setState(() => _autoTrackingEnabled = false);
-                          }
-                        }
-                      : null,
-                  child: const Text('Disable'),
-                ),
-              ),
-            ],
-          ),
-          const VSpace.sm(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPermissionMissingCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppDesignSystem.error.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppDesignSystem.r16),
-        border: Border.all(
-          color: AppDesignSystem.error.withOpacity(0.3),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: AppDesignSystem.error),
-          const HSpace.md(),
-          Expanded(
-            child: Text(
-              'Permission missing. Enable Notification Access to turn on auto-tracking.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          const HSpace.sm(),
-          TextButton(
-            onPressed: _showPermissionDialog,
-            child: const Text('Enable'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNeedsReviewRow() {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: _iconBox(Icons.rule_rounded, Colors.deepOrange),
-      title: Text(
-        'Needs review',
-        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-      ),
-      subtitle: Text(
-        _needsReviewCount == 0
-            ? 'No pending items'
-            : '$_needsReviewCount pending item(s)',
-      ),
-    );
-  }
-
-  Widget _buildRecoveryInstructions({
-    required String title,
-    required String message,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: AppDesignSystem.brandAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(AppDesignSystem.r16),
-        border: Border.all(
-          color: AppDesignSystem.brandAccent.withOpacity(0.3),
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.info_outline_rounded,
-              color: AppDesignSystem.brandAccent),
-          const HSpace.md(),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const VSpace.xs(),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-          const HSpace.sm(),
-          TextButton(
-            onPressed: _showPermissionDialog,
-            child: const Text('Fix'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  bool _isNoNotifications(int? lastTimestamp) {
-    if (lastTimestamp == null || lastTimestamp <= 0) return true;
-    final lastDate =
-        DateTime.fromMillisecondsSinceEpoch(lastTimestamp).toLocal();
-    final diff = DateTime.now().difference(lastDate);
-    return diff.inDays >= _noNotificationThresholdDays;
-  }
-
-  void _logAutoTrackingHealth({
-    required bool permissionGranted,
-    required int? lastTimestamp,
-    required bool noNotifications,
-  }) {
-    final daysAgo = lastTimestamp == null
-        ? 'unknown'
-        : DateTime.now()
-            .difference(DateTime.fromMillisecondsSinceEpoch(lastTimestamp))
-            .inDays
-            .toString();
-    debugPrint(
-      'AutoTracking status: permission=$permissionGranted, '
-      'lastNotificationDaysAgo=$daysAgo, '
-      'noNotifications=$noNotifications',
-    );
-  }
-
-  void _logAutoTrackingError(Object error) {
-    debugPrint('AutoTracking load error: $error');
-  }
-
-  void _showPermissionDialog() {
-    showDesignSystemDialog(
-      context: context,
-      title: 'Enable Auto-Tracking',
-      message:
-          'Turn on Notification Access so we can read transaction alerts and auto-track expenses.',
-      confirmLabel: 'Open Settings',
-      onConfirm: () async {
-        await _notificationChannel.openNotificationSettings();
-      },
     );
   }
 
@@ -782,7 +419,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: iconCol.withOpacity(0.1),
+        color: iconCol.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Icon(icon, color: iconCol, size: 22),
@@ -794,7 +431,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       height: 1,
       indent: 64,
       endIndent: 16,
-      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05),
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
     );
   }
 
@@ -808,12 +445,14 @@ class _ProfileScreenState extends State<ProfileScreen>
         try {
           await AuthService().signOut();
           if (context.mounted) {
-            Navigator.of(context).pushReplacementNamed('/auth');
+            unawaited(Navigator.of(context).pushReplacementNamed('/auth'));
           }
-        } catch (e) {
+        } catch (_) {
           if (context.mounted) {
             showDesignSystemSnackBar(
-                context: context, message: 'Error: $e', isError: true);
+                context: context,
+                message: "Couldn't sign out. Please try again.",
+                isError: true);
           }
         }
       },
@@ -832,7 +471,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         try {
           await AuthService().deleteAccount();
           if (context.mounted) {
-            Navigator.of(context).pushReplacementNamed('/auth');
+            unawaited(Navigator.of(context).pushReplacementNamed('/auth'));
           }
         } catch (e) {
           if (context.mounted) {
@@ -928,9 +567,9 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   void _showSecurityDialog(BuildContext context) async {
     final canAuth = await _securityService.canAuthenticate();
-    if (!mounted) return;
+    if (!context.mounted) return;
 
-    showDialog(
+    unawaited(showDialog(
       context: context,
       builder: (context) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
@@ -974,140 +613,27 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
         ),
       ),
-    );
-  }
-
-  void _showNotificationsDialog(BuildContext context) {
-    bool daily = true;
-    bool trans = true;
-
-    showDialog(
-      context: context,
-      builder: (context) => FutureBuilder<AppUser?>(
-        future: _userFuture,
-        builder: (context, userSnapshot) {
-          final appUser = userSnapshot.data;
-          String selectedTime = appUser?.preferredNotificationTime ?? '20:00';
-
-          return StatefulBuilder(
-            builder: (context, setDialogState) => BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Dialog(
-                backgroundColor: Colors.transparent,
-                child: DesignSystemCard(
-                  glass: true,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Preferences',
-                          style: Theme.of(context).textTheme.titleLarge),
-                      const VSpace.md(),
-                      _buildSwitchTile(
-                          'Daily Reminders',
-                          'Log your expenses daily',
-                          daily,
-                          (v) => setDialogState(() => daily = v)),
-                      if (daily) ...[
-                        const VSpace.sm(),
-                        ListTile(
-                          title: const Text('Reminder Time',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text('Currently set to $selectedTime'),
-                          trailing: Icon(Icons.access_time_rounded,
-                              color: Theme.of(context).colorScheme.primary),
-                          onTap: () async {
-                            final parts = selectedTime.split(':');
-                            final initialTime = TimeOfDay(
-                              hour: int.parse(parts[0]),
-                              minute: int.parse(parts[1]),
-                            );
-
-                            final TimeOfDay? picked = await showTimePicker(
-                              context: context,
-                              initialTime: initialTime,
-                            );
-
-                            if (picked != null) {
-                              final formattedTime =
-                                  '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-                              setDialogState(
-                                  () => selectedTime = formattedTime);
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ],
-                      _buildSwitchTile(
-                          'Smart SMS Detection',
-                          'Auto-detect from SMS',
-                          trans,
-                          (v) => setDialogState(() => trans = v)),
-                      const VSpace.lg(),
-                      GradientButton(
-                        text: 'Save Changes',
-                        onPressed: () async {
-                          try {
-                            await _authService
-                                .updateNotificationTime(selectedTime);
-
-                            // Schedule the actual local notification if enabled
-                            if (daily) {
-                              final parts = selectedTime.split(':');
-                              final hour = int.parse(parts[0]);
-                              final minute = int.parse(parts[1]);
-                              await NotificationService()
-                                  .scheduleDailyReminder(hour, minute);
-                            }
-
-                            if (context.mounted) {
-                              Navigator.pop(context);
-                              _loadUserData(); // Refresh local user data
-                              setState(() {});
-                              showDesignSystemSnackBar(
-                                context: context,
-                                message: 'Preferences updated!',
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              showDesignSystemSnackBar(
-                                context: context,
-                                message: 'Failed to save: $e',
-                                isError: true,
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
+    ));
   }
 
   void _showAboutDialog(BuildContext context) {
-    showDialog(
+    unawaited(showDialog(
       context: context,
       builder: (context) => BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: AboutDialog(
+        child: const AboutDialog(
           applicationName: 'Expense Pro',
           applicationVersion: '2.1.0',
-          applicationIcon: const Icon(Icons.auto_graph_rounded,
+          applicationIcon: Icon(Icons.auto_graph_rounded,
               color: AppDesignSystem.brandPrimary, size: 40),
           children: [
-            const VSpace.md(),
-            const Text(
+            VSpace.md(),
+            Text(
                 'A premium financial management tool built for high-performance individuals.'),
           ],
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildSwitchTile(String title, String subtitle, bool value,
@@ -1117,69 +643,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       subtitle: Text(subtitle),
       trailing: Switch.adaptive(
           value: value,
-          activeColor: AppDesignSystem.brandPrimary,
+          activeTrackColor: AppDesignSystem.brandPrimary,
           onChanged: onChanged),
       contentPadding: EdgeInsets.zero,
-    );
-  }
-
-  void _showSimulationDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Notification Simulation',
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center,
-            ),
-            const VSpace.md(),
-            const Text(
-              'Test various notification-triggered features manually.',
-              textAlign: TextAlign.center,
-            ),
-            const VSpace.xl(),
-            GradientButton(
-              text: 'Simulate GPay: ₹500 to Swiggy',
-              onPressed: () {
-                Navigator.pop(context);
-                NotificationService().testTransaction(
-                  'com.google.android.apps.nbu.paisa.user',
-                  'Paid ₹500 to Swiggy',
-                );
-              },
-            ),
-            const VSpace.md(),
-            GradientButton(
-              text: 'Simulate PhonePe: ₹1,200 to Zomato',
-              onPressed: () {
-                Navigator.pop(context);
-                NotificationService().testTransaction(
-                  'com.phonepe.app',
-                  'Paid ₹1,200 to Zomato',
-                );
-              },
-            ),
-            const VSpace.md(),
-            SecondaryButton(
-              text: 'Test Daily Reminder Notification',
-              onPressed: () {
-                Navigator.pop(context);
-                NotificationService().testDailyReminder();
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

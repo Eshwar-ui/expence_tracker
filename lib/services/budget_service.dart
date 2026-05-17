@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/budget.dart';
-import '../models/expence.dart';
 
 class BudgetService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -117,20 +116,13 @@ class BudgetService {
 
       double totalSpent = 0.0;
       for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final dateStr = data['date'] as String?;
-        if (dateStr == null) continue;
+        final expense = _expenseFromDoc(doc.data());
 
-        final date = DateTime.parse(dateStr);
-        final cat = data['category'] as String? ?? '';
-        final type = data['type'] as String? ?? 'expense';
-        final amount = (data['amount'] ?? 0).toDouble();
-
-        if (cat.toLowerCase() == category.toLowerCase() &&
-            type == 'expense' &&
-            !date.isBefore(startDate) &&
-            !date.isAfter(endDate)) {
-          totalSpent += amount;
+        if (expense.category.toLowerCase() == category.toLowerCase() &&
+            expense.type == 'expense' &&
+            !expense.date.isBefore(startDate) &&
+            !expense.date.isAfter(endDate)) {
+          totalSpent += expense.amount;
         }
       }
       return totalSpent;
@@ -161,18 +153,12 @@ class BudgetService {
 
       final categorySpent = <String, double>{};
       for (final doc in querySnapshot.docs) {
-        final data = doc.data();
-        final dateStr = data['date'] as String?;
-        if (dateStr == null) continue;
+        final expense = _expenseFromDoc(doc.data());
+        if (expense.date.isBefore(startOfMonth)) continue;
 
-        final date = DateTime.parse(dateStr);
-        if (date.isBefore(startOfMonth)) continue;
-
-        final category = data['category'] as String? ?? 'Other';
-        final amount = (data['amount'] ?? 0).toDouble();
-
-        categorySpent[category.toLowerCase()] =
-            (categorySpent[category.toLowerCase()] ?? 0.0) + amount;
+        categorySpent[expense.category.toLowerCase()] =
+            (categorySpent[expense.category.toLowerCase()] ?? 0.0) +
+                expense.amount;
       }
 
       for (final budget in budgets) {
@@ -211,9 +197,10 @@ class BudgetService {
 
       final totalBudgeted = budgets.fold(
         0.0,
-        (sum, budget) => sum + budget.limit,
+        (acc, budget) => acc + budget.limit,
       );
-      final totalSpent = budgets.fold(0.0, (sum, budget) => sum + budget.spent);
+      final totalSpent =
+          budgets.fold(0.0, (acc, budget) => acc + budget.spent);
       final remaining = totalBudgeted - totalSpent;
 
       final exceededBudgets = budgets
@@ -274,4 +261,39 @@ class BudgetService {
   String generateId() {
     return DateTime.now().millisecondsSinceEpoch.toString();
   }
+
+  BudgetExpenseView _expenseFromDoc(Map<String, dynamic> data) {
+    final value = data['date'];
+    DateTime date;
+    if (value is Timestamp) {
+      date = value.toDate();
+    } else if (value is String) {
+      date = DateTime.tryParse(value) ?? DateTime.now();
+    } else if (value is int) {
+      date = DateTime.fromMillisecondsSinceEpoch(value);
+    } else {
+      date = DateTime.now();
+    }
+
+    return BudgetExpenseView(
+      category: data['category'] as String? ?? 'Other',
+      type: data['type'] as String? ?? 'expense',
+      amount: (data['amount'] as num?)?.toDouble() ?? 0.0,
+      date: date,
+    );
+  }
+}
+
+class BudgetExpenseView {
+  final String category;
+  final String type;
+  final double amount;
+  final DateTime date;
+
+  const BudgetExpenseView({
+    required this.category,
+    required this.type,
+    required this.amount,
+    required this.date,
+  });
 }

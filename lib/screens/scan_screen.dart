@@ -11,7 +11,12 @@ import '../utils/app_design_system.dart';
 import '../widgets/design_system_components.dart';
 
 class ScanScreen extends StatefulWidget {
-  const ScanScreen({super.key});
+  final bool showScaffold;
+
+  const ScanScreen({
+    super.key,
+    this.showScaffold = true,
+  });
 
   @override
   State<ScanScreen> createState() => _ScanScreenState();
@@ -20,10 +25,11 @@ class ScanScreen extends StatefulWidget {
 class _ScanScreenState extends State<ScanScreen> {
   final SMSService _smsService = SMSService();
   final SMSTrackingService _trackingService = SMSTrackingService();
+  final TextEditingController _searchController = TextEditingController();
 
   List<TransactionSMS> _transactions = [];
   Set<String> _addedTransactions = {};
-  Set<String> _selectedTransactions = {}; // For bulk selection
+  final Set<String> _selectedTransactions = {}; // For bulk selection
   bool _isLoading = false;
   bool _hasPermission = false;
   String? _errorMessage;
@@ -37,6 +43,12 @@ class _ScanScreenState extends State<ScanScreen> {
     _checkPermissionAndScan();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadAddedTransactions() async {
     try {
       final addedTransactions = await _trackingService.getAddedTransactionIds();
@@ -44,8 +56,8 @@ class _ScanScreenState extends State<ScanScreen> {
       setState(() {
         _addedTransactions = addedTransactions;
       });
-    } catch (e) {
-      print('Failed to load added transactions: $e');
+    } catch (_) {
+      // Non-fatal: empty added-set just means we won't grey-out already-added rows.
     }
   }
 
@@ -76,11 +88,11 @@ class _ScanScreenState extends State<ScanScreen> {
 
       // Now scan all SMS messages
       await _scanAllTransactions();
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Failed to scan transactions: $e';
+        _errorMessage = "Couldn't scan SMS. Please try again.";
       });
     }
   }
@@ -94,10 +106,7 @@ class _ScanScreenState extends State<ScanScreen> {
         _errorMessage = null;
       });
 
-      // Get all SMS messages
-      print('🔍 Scanning SMS messages...');
       final transactions = await _smsService.getAllTransactions();
-      print('📨 Found ${transactions.length} SMS transactions');
 
       if (!mounted) return;
 
@@ -114,17 +123,16 @@ class _ScanScreenState extends State<ScanScreen> {
           icon: Icons.sms_rounded,
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Failed to scan transactions: $e';
+        _errorMessage = "Couldn't scan SMS. Please try again.";
       });
 
-      // Show error message
       showDesignSystemSnackBar(
         context: context,
-        message: 'Error: $e',
+        message: "Couldn't scan SMS. Please try again.",
         isError: true,
       );
     }
@@ -139,10 +147,19 @@ class _ScanScreenState extends State<ScanScreen> {
       final firestoreService = FirestoreService();
       int successCount = 0;
 
+      int failureCount = 0;
       for (final transactionId in _selectedTransactions) {
-        final transaction = _transactions.firstWhere(
-          (t) => t.id == transactionId,
-        );
+        TransactionSMS? transaction;
+        for (final t in _transactions) {
+          if (t.id == transactionId) {
+            transaction = t;
+            break;
+          }
+        }
+        if (transaction == null) {
+          failureCount++;
+          continue;
+        }
 
         try {
           final expense = Expense(
@@ -163,8 +180,8 @@ class _ScanScreenState extends State<ScanScreen> {
           await _trackingService.markTransactionAsAdded(transaction.id);
           _addedTransactions.add(transaction.id);
           successCount++;
-        } catch (e) {
-          print('Error adding transaction ${transaction.id}: $e');
+        } catch (_) {
+          failureCount++;
         }
       }
 
@@ -174,17 +191,23 @@ class _ScanScreenState extends State<ScanScreen> {
         _isLoading = false;
       });
 
+      final summary = failureCount == 0
+          ? 'Added $successCount transaction(s) successfully!'
+          : 'Added $successCount, skipped $failureCount that failed.';
       showDesignSystemSnackBar(
         context: context,
-        message: 'Added $successCount transaction(s) successfully!',
-        icon: Icons.done_all_rounded,
+        message: summary,
+        icon: failureCount == 0
+            ? Icons.done_all_rounded
+            : Icons.warning_amber_rounded,
+        isError: successCount == 0,
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() => _isLoading = false);
       showDesignSystemSnackBar(
         context: context,
-        message: 'Error: $e',
+        message: "Couldn't add transactions. Please try again.",
         isError: true,
       );
     }
@@ -243,8 +266,8 @@ class _ScanScreenState extends State<ScanScreen> {
               _addedTransactions.add(transaction.id);
               _selectedTransactions.remove(transaction.id);
             });
-          } catch (e) {
-            print('Failed to mark transaction as added: $e');
+          } catch (_) {
+            // Non-fatal: tracking lookup may be temporarily unavailable.
           }
         },
       ),
@@ -301,7 +324,7 @@ class _ScanScreenState extends State<ScanScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.1),
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -324,25 +347,14 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: PremiumAppBar(
-        title: 'Scan Transactions',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _scanAllTransactions,
-            tooltip: 'Rescan all messages',
-          ),
-        ],
-      ),
-      body: Column(
+    final body = Column(
         children: [
           _buildTopSearchAndFilter(theme),
           Expanded(child: _buildBody()),
         ],
-      ),
-      floatingActionButton: _selectedTransactions.isNotEmpty
+      );
+
+    final fab = _selectedTransactions.isNotEmpty
           ? Padding(
               padding: const EdgeInsets.only(bottom: 90),
               child: FloatingActionButton.extended(
@@ -358,7 +370,36 @@ class _ScanScreenState extends State<ScanScreen> {
                 ),
               ),
             )
-          : null,
+          : null;
+
+    if (!widget.showScaffold) {
+      return Stack(
+        children: [
+          body,
+          if (fab != null)
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: fab,
+            ),
+        ],
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: PremiumAppBar(
+        title: 'Scan Transactions',
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded),
+            onPressed: _scanAllTransactions,
+            tooltip: 'Rescan all messages',
+          ),
+        ],
+      ),
+      body: body,
+      floatingActionButton: fab,
     );
   }
 
@@ -369,14 +410,20 @@ class _ScanScreenState extends State<ScanScreen> {
       child: Column(
         children: [
           DesignSystemTextField(
-            controller: TextEditingController(text: _searchQuery)
-              ..selection = TextSelection.fromPosition(
-                TextPosition(offset: _searchQuery.length),
-              ),
+            controller: _searchController,
             label: 'Search',
             hint: 'Search merchant or bank...',
             icon: Icons.search_rounded,
             onChanged: (val) => setState(() => _searchQuery = val),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  )
+                : null,
           ),
           const VSpace.md(),
           SingleChildScrollView(
@@ -430,7 +477,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     color: Theme.of(context)
                         .colorScheme
                         .onSurface
-                        .withOpacity(0.6),
+                        .withValues(alpha: 0.6),
                   ),
             ),
           ],
@@ -486,7 +533,7 @@ class _ScanScreenState extends State<ScanScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppDesignSystem.brandPrimary.withOpacity(0.1),
+                color: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -512,7 +559,7 @@ class _ScanScreenState extends State<ScanScreen> {
                     style: TextStyle(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.5),
+                      ).colorScheme.onSurface.withValues(alpha: 0.5),
                       fontSize: 13,
                     ),
                   ),
@@ -529,40 +576,14 @@ class _ScanScreenState extends State<ScanScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
-            const SizedBox(height: 16),
-            Text(
-              'Error',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.red[700],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _checkPermissionAndScan,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Try Again',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+        child: DesignSystemEmptyState(
+          icon: Icons.error_outline_rounded,
+          title: 'Inbox scan failed',
+          message: _errorMessage!,
+          action: GradientButton(
+            text: 'Try Again',
+            onPressed: _checkPermissionAndScan,
+          ),
         ),
       ),
     );
@@ -572,40 +593,15 @@ class _ScanScreenState extends State<ScanScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.security, size: 64, color: Colors.orange[300]),
-            const SizedBox(height: 16),
-            Text(
-              'Permission Required',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.orange[700],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'We need SMS permission to scan your transaction messages. This helps automatically detect your expenses.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _checkPermissionAndScan,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Grant Permission',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+        child: DesignSystemEmptyState(
+          icon: Icons.security_rounded,
+          title: 'SMS permission required',
+          message:
+              'Allow SMS access to detect bank transaction messages and prepare them for review.',
+          action: GradientButton(
+            text: 'Grant Permission',
+            onPressed: _checkPermissionAndScan,
+          ),
         ),
       ),
     );
@@ -615,40 +611,15 @@ class _ScanScreenState extends State<ScanScreen> {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.sms_failed, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No Transactions Found',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'We couldn\'t find any recent transaction messages in your SMS. Make sure you have received bank alerts recently.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _scanAllTransactions,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppDesignSystem.brandPrimary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Text(
-                'Scan Again',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
+        child: DesignSystemEmptyState(
+          icon: Icons.sms_failed_rounded,
+          title: 'No transactions found',
+          message:
+              'We could not find recent bank transaction messages in your SMS inbox.',
+          action: GradientButton(
+            text: 'Scan Again',
+            onPressed: _scanAllTransactions,
+          ),
         ),
       ),
     );
@@ -699,7 +670,7 @@ class _ScanScreenState extends State<ScanScreen> {
               decoration: BoxDecoration(
                 color:
                     (isDebit ? AppDesignSystem.error : AppDesignSystem.success)
-                        .withOpacity(0.1),
+                        .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
@@ -722,16 +693,16 @@ class _ScanScreenState extends State<ScanScreen> {
                       fontWeight: FontWeight.w700,
                       decoration: isAdded ? TextDecoration.lineThrough : null,
                       color: isAdded
-                          ? theme.colorScheme.onSurface.withOpacity(0.4)
+                          ? theme.colorScheme.onSurface.withValues(alpha: 0.4)
                           : null,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    '${transaction.bankName} • ${DateFormat('MMM dd').format(transaction.date)}',
+                    '${transaction.bankName} | ${DateFormat('MMM dd').format(transaction.date)}',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                     ),
                   ),
                 ],
@@ -741,11 +712,11 @@ class _ScanScreenState extends State<ScanScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isDebit ? '-' : '+'}₹${transaction.amount.toStringAsFixed(0)}',
+                  '${isDebit ? '-' : '+'}\u20B9${transaction.amount.toStringAsFixed(0)}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: isAdded
-                        ? theme.colorScheme.onSurface.withOpacity(0.3)
+                        ? theme.colorScheme.onSurface.withValues(alpha: 0.3)
                         : (isDebit
                             ? AppDesignSystem.error
                             : AppDesignSystem.success),
@@ -768,9 +739,8 @@ class _ScanScreenState extends State<ScanScreen> {
                         ),
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        backgroundColor: theme.colorScheme.primary.withOpacity(
-                          0.1,
-                        ),
+                        backgroundColor:
+                            theme.colorScheme.primary.withValues(alpha: 0.1),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -815,11 +785,11 @@ class _FilterChip extends StatelessWidget {
         selected: isSelected,
         onSelected: (_) => onSelected(),
         backgroundColor: theme.colorScheme.surface,
-        selectedColor: theme.colorScheme.primary.withOpacity(0.15),
+        selectedColor: theme.colorScheme.primary.withValues(alpha: 0.15),
         labelStyle: TextStyle(
           color: isSelected
               ? theme.colorScheme.primary
-              : theme.colorScheme.onSurface.withOpacity(0.6),
+              : theme.colorScheme.onSurface.withValues(alpha: 0.6),
           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           fontSize: 13,
         ),
@@ -829,7 +799,7 @@ class _FilterChip extends StatelessWidget {
           side: BorderSide(
             color: isSelected
                 ? theme.colorScheme.primary
-                : theme.colorScheme.outline.withOpacity(0.1),
+                : theme.colorScheme.outline.withValues(alpha: 0.1),
           ),
         ),
       ),

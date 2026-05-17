@@ -24,10 +24,14 @@ class RecurringTransactionService {
   Future<void> createRecurringTransaction(
     RecurringTransaction transaction,
   ) async {
-    if (_userId == null) throw Exception('User not authenticated');
+    final uid = _userId;
+    if (uid == null) throw Exception('User not authenticated');
 
+    // Stamp the userId from the signed-in account so callers cannot accidentally
+    // create records owned by someone else (or with an empty userId).
+    final stamped = transaction.copyWith(userId: uid);
     try {
-      await _recurringCollection.doc(transaction.id).set(transaction.toMap());
+      await _recurringCollection.doc(stamped.id).set(stamped.toMap());
     } catch (e) {
       throw Exception('Failed to create recurring transaction: $e');
     }
@@ -37,12 +41,12 @@ class RecurringTransactionService {
   Future<void> updateRecurringTransaction(
     RecurringTransaction transaction,
   ) async {
-    if (_userId == null) throw Exception('User not authenticated');
+    final uid = _userId;
+    if (uid == null) throw Exception('User not authenticated');
 
+    final stamped = transaction.copyWith(userId: uid);
     try {
-      await _recurringCollection
-          .doc(transaction.id)
-          .update(transaction.toMap());
+      await _recurringCollection.doc(stamped.id).update(stamped.toMap());
     } catch (e) {
       throw Exception('Failed to update recurring transaction: $e');
     }

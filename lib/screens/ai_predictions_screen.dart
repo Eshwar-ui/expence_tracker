@@ -1,14 +1,14 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
+
 import '../models/expence.dart';
 import '../models/expense_prediction.dart';
-import '../services/gemini_ai_service.dart';
 import '../services/firestore_service.dart';
+import '../services/gemini_ai_service.dart';
 import '../utils/app_design_system.dart';
 import '../widgets/design_system_components.dart';
 
-/// Screen displaying AI-powered expense predictions
 class AIPredictionsScreen extends StatefulWidget {
   const AIPredictionsScreen({super.key});
 
@@ -19,12 +19,17 @@ class AIPredictionsScreen extends StatefulWidget {
 class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
   final GeminiAIService _aiService = GeminiAIService();
   final FirestoreService _firestoreService = FirestoreService();
+  final NumberFormat _money =
+      NumberFormat.currency(locale: 'en_IN', symbol: '\u20B9', decimalDigits: 0);
 
   ExpensePrediction? _prediction;
   List<SpendingInsight> _insights = [];
   List<Expense> _recentExpenses = [];
   bool _isLoading = false;
+  bool _usingFallbackInsights = false;
   String? _errorMessage;
+  DateTime? _analysisStart;
+  DateTime? _analysisEnd;
 
   @override
   void initState() {
@@ -37,57 +42,42 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
+      _usingFallbackInsights = false;
     });
-
-    print('🚀 Starting AI predictions load...');
 
     try {
       final now = DateTime.now();
-      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+      final start = now.subtract(const Duration(days: 30));
+      _analysisStart = start;
+      _analysisEnd = now;
 
       final allExpenses = await _firestoreService.getExpenses();
       if (!mounted) return;
 
-      _recentExpenses =
-          allExpenses.where((e) => e.date.isAfter(thirtyDaysAgo)).toList();
-
-      print('📊 Found ${_recentExpenses.length} expenses in last 30 days');
+      _recentExpenses = allExpenses.where((expense) => expense.date.isAfter(start)).toList();
 
       if (_recentExpenses.isEmpty) {
-        print('⚠️ No recent expenses found');
         setState(() {
-          _errorMessage = 'No expenses found in last 30 days.';
+          _errorMessage = 'No expenses found in the last 30 days.';
           _isLoading = false;
         });
         return;
       }
 
-      // Get AI insights
-      print('💡 Fetching AI insights...');
       final insights = await _aiService.generateInsights(_recentExpenses);
-      print('✅ Received ${insights.length} insights');
-
-      // Get predictions
-      print('📈 Fetching predictions...');
       final prediction = await _aiService.predictFutureExpenses();
-      print('✅ Predictions received: ${prediction != null ? "Yes" : "No"}');
 
       if (!mounted) return;
-
       setState(() {
         _insights = insights;
         _prediction = prediction;
+        _usingFallbackInsights = !_aiService.isConfigured;
         _isLoading = false;
       });
-
-      print('🎉 AI predictions loaded successfully!');
-      print('   - Insights: ${_insights.length}');
-      print('   - Prediction: ${_prediction != null}');
-    } catch (e) {
-      print('❌ Error in _loadPredictions: $e');
+    } catch (error) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = 'Error loading predictions: $e';
+        _errorMessage = 'Failed to load AI insights: $error';
         _isLoading = false;
       });
     }
@@ -100,8 +90,8 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
         title: 'AI Insights',
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
             onPressed: _loadPredictions,
+            icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
@@ -110,102 +100,116 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
             ? const DesignSystemLoading()
             : _errorMessage != null
                 ? _buildErrorState()
-                : (_insights.isEmpty && _prediction == null)
+                : (_prediction == null && _insights.isEmpty)
                     ? _buildEmptyState()
-                    : _buildPredictionsContent(),
+                    : RefreshIndicator(
+                        onRefresh: _loadPredictions,
+                        child: _buildContent(),
+                      ),
       ),
     );
   }
 
   Widget _buildErrorState() {
     return DesignSystemEmptyState(
-      icon: Icons.error_outline,
-      title: 'Wait a moment',
-      message: _errorMessage ?? 'An error occurred',
-      action: GradientButton(text: 'Try Again', onPressed: _loadPredictions),
+      icon: Icons.error_outline_rounded,
+      title: 'Could not load AI insights',
+      message: _errorMessage ?? 'Please try again.',
+      action: GradientButton(text: 'Retry', onPressed: _loadPredictions),
     );
   }
 
   Widget _buildEmptyState() {
     return const DesignSystemEmptyState(
-      icon: Icons.analytics_outlined,
-      title: 'Analyze More',
-      message: 'Add more expenses to generate AI insights.',
+      icon: Icons.psychology_alt_rounded,
+      title: 'Not enough data yet',
+      message: 'Add recent transactions to generate a reliable forecast.',
     );
   }
 
-  Widget _buildPredictionsContent() {
+  Widget _buildContent() {
+    return ListView(
+      padding: const EdgeInsets.all(AppDesignSystem.s24),
+      children: [
+        _buildStatusBanner(),
+        const VSpace.lg(),
+        _buildForecastHero(),
+        const VSpace.lg(),
+        _buildMetricsRow(),
+        const VSpace.lg(),
+        _buildInsightsSection(),
+        const VSpace.lg(),
+        if (_prediction != null) _buildTrendSection(),
+        if (_prediction != null) const VSpace.lg(),
+        if (_prediction != null) _buildCategorySection(),
+        const VSpace.lg(),
+        _buildDataContextCard(),
+        const SizedBox(height: 96),
+      ],
+    );
+  }
+
+  Widget _buildStatusBanner() {
     final theme = Theme.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: AppDesignSystem.s24),
-      child: Column(
+    final bannerColor = _usingFallbackInsights
+        ? AppDesignSystem.brandAccent
+        : AppDesignSystem.brandInfo;
+
+    final title =
+        _usingFallbackInsights ? 'Experimental AI mode' : 'AI analysis available';
+
+    final message = _usingFallbackInsights
+        ? 'Gemini is not configured, so these insights are generated from local rules and recent transaction patterns.'
+        : 'Insights are generated from your recent transactions and should still be reviewed before acting on them.';
+
+    return DesignSystemCard(
+      glass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-            child: Text('Financial Forecast',
-                style: theme.textTheme.headlineMedium),
-          ),
-          const VSpace.md(),
-          if (_prediction != null) ...[
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-              child: _buildSummaryCard(),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: bannerColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            const VSpace.xl(),
-          ],
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-            child: Text('Smart Insights', style: theme.textTheme.titleLarge),
+            child: Icon(
+              _usingFallbackInsights
+                  ? Icons.science_rounded
+                  : Icons.auto_awesome_rounded,
+              color: bannerColor,
+            ),
           ),
-          const VSpace.md(),
-          if (_insights.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-              child: DesignSystemCard(
-                child: Padding(
-                  padding: EdgeInsets.all(AppDesignSystem.s16),
-                  child: Row(
-                    children: [
-                      Icon(Icons.auto_awesome, color: AppDesignSystem.textMed),
-                      HSpace.md(),
-                      Expanded(child: Text('Analyzing your finances...')),
-                    ],
+          const HSpace.md(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-            )
-          else
-            _buildInsightsCarousel(),
-          if (_prediction != null) ...[
-            const VSpace.xl(),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-              child: Text('30-Day Trend', style: theme.textTheme.titleLarge),
+                const VSpace.xs(),
+                Text(message, style: theme.textTheme.bodySmall),
+              ],
             ),
-            const VSpace.md(),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-              child: _buildDailyPredictionsChart(),
-            ),
-            const VSpace.xl(),
-            _buildVisualCategoryPredictions(),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard() {
-    final p = _prediction!;
+  Widget _buildForecastHero() {
+    final prediction = _prediction;
+    final amount = prediction?.totalPredictedSpending ?? 0.0;
+    final lastUpdated = prediction?.predictionDate ?? DateTime.now();
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppDesignSystem.s24),
+      padding: const EdgeInsets.all(AppDesignSystem.s20),
       decoration: BoxDecoration(
         gradient: AppDesignSystem.primaryGradient,
         borderRadius: BorderRadius.circular(AppDesignSystem.r24),
@@ -215,169 +219,254 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Icon(Icons.show_chart, color: Colors.white70),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Text(
-                  'AI FORECAST',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.5,
-                  ),
-                ),
+              const Icon(Icons.auto_graph_rounded, color: Colors.white),
+              const HSpace.sm(),
+              Text(
+                '30-Day Spending Forecast',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('dd MMM').format(lastUpdated),
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
-          const VSpace.xl(),
-          const Text(
-            'Predicted Spend (30 Days)',
-            style: TextStyle(color: Colors.white70, fontSize: 14),
+          const VSpace.md(),
+          Text(
+            _money.format(amount),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const VSpace.xs(),
           Text(
-            '₹${p.totalPredictedSpending.toStringAsFixed(0)}',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const VSpace.lg(),
-          Row(
-            children: [
-              _summaryMetric('Next 7 Days',
-                  '₹${p.getNextWeekPrediction().toStringAsFixed(0)}'),
-              const SizedBox(width: AppDesignSystem.s24),
-              _summaryMetric('Daily Avg',
-                  '₹${(p.totalPredictedSpending / 30).toStringAsFixed(0)}'),
-            ],
+            _usingFallbackInsights
+                ? 'Rule-based estimate for the next 30 days'
+                : 'Estimated total expense for the next 30 days',
+            style: const TextStyle(color: Colors.white70),
           ),
         ],
       ),
     );
   }
 
-  Widget _summaryMetric(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildMetricsRow() {
+    final prediction = _prediction;
+    final nextWeek = prediction?.getNextWeekPrediction() ?? 0.0;
+    final avgDay = (prediction?.totalPredictedSpending ?? 0.0) / 30;
+    final anomaly = ((prediction?.anomalyScore ?? 0.0) * 100).clamp(0, 100);
+
+    return Row(
       children: [
-        Text(
-          label,
-          style: const TextStyle(color: Colors.white60, fontSize: 12),
+        Expanded(
+          child: _metricCard(
+            title: 'Next 7 Days',
+            value: _money.format(nextWeek),
+            icon: Icons.calendar_view_week_rounded,
+          ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+        const HSpace.sm(),
+        Expanded(
+          child: _metricCard(
+            title: 'Daily Avg',
+            value: _money.format(avgDay),
+            icon: Icons.today_rounded,
+          ),
+        ),
+        const HSpace.sm(),
+        Expanded(
+          child: _metricCard(
+            title: 'Anomaly',
+            value: '${anomaly.toStringAsFixed(0)}%',
+            icon: Icons.warning_amber_rounded,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildInsightsCarousel() {
-    return SizedBox(
-      height: 170,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-        scrollDirection: Axis.horizontal,
-        itemCount: _insights.length,
-        separatorBuilder: (c, i) => const SizedBox(width: AppDesignSystem.s16),
-        itemBuilder: (context, index) =>
-            _buildVisualInsightCard(_insights[index]),
-      ),
-    );
-  }
-
-  Widget _buildVisualInsightCard(SpendingInsight insight) {
-    // Determine color/icon based on insight.type
-    final isNegative = insight.type == 'savings' || insight.type == 'anomaly';
-    final color = isNegative
-        ? AppDesignSystem.brandAccent
-        : AppDesignSystem.brandSecondary;
-    final icon = isNegative ? Icons.trending_down : Icons.trending_up;
-
-    return Container(
-      width: 260,
-      padding: const EdgeInsets.all(AppDesignSystem.s20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardTheme.color,
-        borderRadius: BorderRadius.circular(AppDesignSystem.r24),
-        border:
-            Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-        boxShadow: AppDesignSystem.softShadow(Colors.black.withOpacity(0.05)),
-      ),
+  Widget _metricCard({
+    required String title,
+    required String value,
+    required IconData icon,
+  }) {
+    return DesignSystemCard(
+      glass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const Spacer(),
-              if (insight.value != null && insight.value! > 0)
-                Text(
-                  '₹${insight.value!.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-            ],
+          Icon(icon, size: 18, color: AppDesignSystem.brandPrimary),
+          const VSpace.xs(),
+          Text(
+            title,
+            style: Theme.of(context).textTheme.labelMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const Spacer(),
-          Text(insight.title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
-          const VSpace.sm(),
-          Text(insight.message,
-              style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).textTheme.bodySmall?.color),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis),
+          const VSpace.xs(),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDailyPredictionsChart() {
-    final dailyData = _prediction!.dailyPredictions;
-    return DesignSystemCard(
-      padding: const EdgeInsets.all(AppDesignSystem.s20),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 200,
+  Widget _buildInsightsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Key Insights', style: Theme.of(context).textTheme.titleLarge),
+        const VSpace.sm(),
+        if (_insights.isEmpty)
+          const DesignSystemCard(
+            child: Padding(
+              padding: EdgeInsets.all(AppDesignSystem.s16),
+              child: Text('No insights generated yet. Pull to refresh.'),
+            ),
+          )
+        else
+          ..._insights.take(6).map(_insightTile),
+      ],
+    );
+  }
+
+  Widget _insightTile(SpendingInsight insight) {
+    final visual = _insightVisual(insight.type);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
+      child: DesignSystemCard(
+        padding: const EdgeInsets.all(AppDesignSystem.s16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: visual.color.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(visual.icon, color: visual.color, size: 18),
+            ),
+            const HSpace.md(),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    insight.title,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const VSpace.xs(),
+                  Text(
+                    insight.message,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            if (insight.value != null && insight.value! > 0) ...[
+              const HSpace.sm(),
+              Text(
+                _money.format(insight.value),
+                style: TextStyle(
+                  color: visual.color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrendSection() {
+    final daily = _prediction!.dailyPredictions;
+    final spots = List.generate(
+      daily.length,
+      (index) => FlSpot(index.toDouble(), daily[index]),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Trend Projection', style: Theme.of(context).textTheme.titleLarge),
+        const VSpace.sm(),
+        DesignSystemCard(
+          padding: const EdgeInsets.all(AppDesignSystem.s16),
+          child: SizedBox(
+            height: 220,
             child: LineChart(
               LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
+                minX: 0,
+                maxX: (daily.length - 1).toDouble(),
+                minY: 0,
+                gridData: FlGridData(
+                  show: true,
+                  horizontalInterval: _niceInterval(daily),
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outlineVariant
+                        .withValues(alpha: 0.35),
+                    strokeWidth: 1,
+                  ),
+                ),
                 borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      interval: _niceInterval(daily),
+                      getTitlesWidget: (value, meta) => Text(
+                        _money.format(value),
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 5,
+                      getTitlesWidget: (value, meta) {
+                        final day = value.toInt() + 1;
+                        return Text(
+                          'D$day',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        );
+                      },
+                    ),
+                  ),
+                ),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: List.generate(
-                      dailyData.length,
-                      (i) => FlSpot(i.toDouble(), dailyData[i]),
-                    ),
+                    spots: spots,
                     isCurved: true,
                     color: AppDesignSystem.brandPrimary,
                     barWidth: 3,
@@ -385,13 +474,12 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
                     dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: AppDesignSystem.brandPrimary.withOpacity(0.15),
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          AppDesignSystem.brandPrimary.withOpacity(0.3),
-                          AppDesignSystem.brandPrimary.withOpacity(0.0),
+                          AppDesignSystem.brandPrimary.withValues(alpha: 0.22),
+                          AppDesignSystem.brandPrimary.withValues(alpha: 0.02),
                         ],
                       ),
                     ),
@@ -400,64 +488,165 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _buildVisualCategoryPredictions() {
-    final categories = _prediction!.categoryPredictions.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value)); // Sort by amount
+  Widget _buildCategorySection() {
+    final entries = _prediction!.categoryPredictions.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final total = entries.fold<double>(0, (sum, item) => sum + item.value);
 
-    // Calculate total for percentage
-    final total = categories.fold<double>(0, (sum, item) => sum + item.value);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Category Breakdown',
-                  style: Theme.of(context).textTheme.titleLarge),
-            ],
-          ),
-          const VSpace.md(),
-          ...categories.take(5).map((e) {
-            final percentage = total > 0 ? (e.value / total) : 0.0;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(e.key,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text('₹${e.value.toStringAsFixed(0)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: percentage,
-                      backgroundColor:
-                          Theme.of(context).dividerColor.withOpacity(0.1),
-                      valueColor: const AlwaysStoppedAnimation(
-                          AppDesignSystem.brandPrimary),
-                      minHeight: 6,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Category Contribution',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const VSpace.sm(),
+        DesignSystemCard(
+          padding: const EdgeInsets.all(AppDesignSystem.s16),
+          child: Column(
+            children: entries.take(6).map((entry) {
+              final pct = total > 0 ? (entry.value / total) : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            entry.key,
+                            style: Theme.of(context).textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          '${(pct * 100).toStringAsFixed(1)}%',
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
+                        const HSpace.sm(),
+                        Text(
+                          _money.format(entry.value),
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
-            );
-          }),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(
+                        value: pct.clamp(0, 1),
+                        minHeight: 7,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .outlineVariant
+                            .withValues(alpha: 0.22),
+                        valueColor: const AlwaysStoppedAnimation(
+                          AppDesignSystem.brandPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDataContextCard() {
+    final expenseOnly =
+        _recentExpenses.where((expense) => expense.type == TransactionType.expense).length;
+    final incomeOnly =
+        _recentExpenses.where((expense) => expense.type == TransactionType.income).length;
+    final rangeText = (_analysisStart != null && _analysisEnd != null)
+        ? '${DateFormat('dd MMM').format(_analysisStart!)} - ${DateFormat('dd MMM').format(_analysisEnd!)}'
+        : 'Last 30 days';
+
+    return DesignSystemCard(
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Model Context', style: Theme.of(context).textTheme.titleMedium),
+          const VSpace.sm(),
+          Text(
+            'Analysis Range: $rangeText',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const VSpace.xs(),
+          Text(
+            'Transactions analyzed: ${_recentExpenses.length} '
+            '(Expenses: $expenseOnly, Income: $incomeOnly)',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const VSpace.xs(),
+          Text(
+            _usingFallbackInsights
+                ? 'Insight source: rule-based fallback forecast and heuristics.'
+                : 'Insight source: Gemini-assisted insight generation with rule-based forecasting.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const VSpace.xs(),
+          Text(
+            'Tip: The forecast improves when at least 30-60 days of consistent spending data is available.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
         ],
       ),
     );
   }
+
+  double _niceInterval(List<double> values) {
+    if (values.isEmpty) return 100;
+    final maxValue = values.reduce((a, b) => a > b ? a : b);
+    if (maxValue <= 100) return 25;
+    if (maxValue <= 500) return 100;
+    if (maxValue <= 2000) return 250;
+    if (maxValue <= 5000) return 500;
+    return 1000;
+  }
+
+  _InsightVisual _insightVisual(String type) {
+    switch (type.toLowerCase()) {
+      case 'anomaly':
+        return const _InsightVisual(
+          Icons.warning_amber_rounded,
+          AppDesignSystem.error,
+        );
+      case 'savings':
+        return const _InsightVisual(
+          Icons.savings_rounded,
+          AppDesignSystem.success,
+        );
+      case 'category':
+        return const _InsightVisual(
+          Icons.pie_chart_rounded,
+          AppDesignSystem.brandPrimary,
+        );
+      case 'trend':
+      default:
+        return const _InsightVisual(
+          Icons.trending_up_rounded,
+          AppDesignSystem.brandSecondary,
+        );
+    }
+  }
+}
+
+class _InsightVisual {
+  final IconData icon;
+  final Color color;
+
+  const _InsightVisual(this.icon, this.color);
 }

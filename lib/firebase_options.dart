@@ -52,7 +52,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyAf68syaLdqgzwkWMuzVj-BEV30ai5a-_4',
-    appId: '1:392502074075:android:26d6f669cae72ed2abcafe',
+    appId: '1:392502074075:android:c21824bd99583033abcafe',
     messagingSenderId: '392502074075',
     projectId: 'xpense-track-e2a4f',
     storageBucket: 'xpense-track-e2a4f.firebasestorage.app',

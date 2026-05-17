@@ -114,11 +114,11 @@ class _AuthScreenState extends State<AuthScreen> {
               gradient: LinearGradient(
                 colors: isDark
                     ? [
-                        AppDesignSystem.brandPrimary.withOpacity(0.1),
+                        AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
                         Colors.black
                       ]
                     : [
-                        AppDesignSystem.brandPrimary.withOpacity(0.05),
+                        AppDesignSystem.brandPrimary.withValues(alpha: 0.05),
                         Colors.white
                       ],
                 begin: Alignment.topLeft,
@@ -138,7 +138,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppDesignSystem.brandPrimary.withOpacity(0.2),
+                  color: AppDesignSystem.brandPrimary.withValues(alpha: 0.2),
                 ),
               ),
             ),
@@ -154,7 +154,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 height: 200,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppDesignSystem.brandSecondary.withOpacity(0.1),
+                  color: AppDesignSystem.brandSecondary.withValues(alpha: 0.1),
                 ),
               ),
             ),
@@ -185,19 +185,32 @@ class _AuthScreenState extends State<AuthScreen> {
                         child: Column(
                           children: [
                             Container(
-                              padding: const EdgeInsets.all(20),
+                              width: 104,
+                              height: 104,
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 gradient: AppDesignSystem.primaryGradient,
-                                shape: BoxShape.circle,
+                                borderRadius: BorderRadius.circular(28),
                                 boxShadow: AppDesignSystem.softShadow(
-                                    AppDesignSystem.brandPrimary),
+                                  AppDesignSystem.brandPrimary,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.account_balance_wallet_rounded,
-                                size: 48,
-                                color: Colors.white,
+                              child: Image.asset(
+                                isDark
+                                    ? 'assets/dark_app_icon.png'
+                                    : 'assets/light_app_icon.png',
+                                fit: BoxFit.contain,
                               ),
                             ),
+                            // const VSpace.sm(),
+                            // Row(
+                            //   mainAxisAlignment: MainAxisAlignment.center,
+                            //   children: [
+                            //     _buildIconChip('assets/light_app_icon.png'),
+                            //     const HSpace.sm(),
+                            //     _buildIconChip('assets/dark_app_icon.png'),
+                            //   ],
+                            // ),
                             const VSpace.lg(),
                             Text(
                               'ECTracker',
@@ -216,7 +229,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   : 'Create your journey',
                               style: theme.textTheme.bodyMedium?.copyWith(
                                 color: theme.colorScheme.onSurface
-                                    .withOpacity(0.6),
+                                    .withValues(alpha: 0.6),
                               ),
                             ),
                           ],
@@ -314,7 +327,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               'OR CONTINUE WITH',
                               style: theme.textTheme.labelSmall?.copyWith(
                                 color: theme.colorScheme.onSurface
-                                    .withOpacity(0.4),
+                                    .withValues(alpha: 0.4),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -336,7 +349,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   BorderRadius.circular(AppDesignSystem.r16),
                             ),
                             side: BorderSide(
-                              color: theme.colorScheme.outline.withOpacity(0.2),
+                              color: theme.colorScheme.outline.withValues(alpha: 0.2),
                             ),
                           ),
                           child: Row(
@@ -371,7 +384,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                 : "Already have an account?",
                             style: TextStyle(
                               color:
-                                  theme.colorScheme.onSurface.withOpacity(0.6),
+                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
                             ),
                           ),
                           TextButton(

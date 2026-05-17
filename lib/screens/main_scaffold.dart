@@ -3,16 +3,8 @@ import 'package:expence_tracker/screens/home.dart';
 import 'package:expence_tracker/screens/transactions_screen.dart';
 import 'package:expence_tracker/screens/reports_screen.dart';
 import 'package:expence_tracker/screens/profile_screen.dart';
-import 'package:expence_tracker/screens/pending_transactions_screen.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
-import 'package:expence_tracker/services/notification_service.dart';
-import 'package:expence_tracker/services/firestore_service.dart';
-import 'package:expence_tracker/models/pending_transaction.dart';
-import 'package:expence_tracker/models/expence.dart';
-import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
-import 'dart:async';
-import 'dart:ui';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -24,166 +16,16 @@ class MainScaffold extends StatefulWidget {
 class _MainScaffoldState extends State<MainScaffold>
     with TickerProviderStateMixin {
   int _currentIndex = 0;
-  StreamSubscription<PendingTransaction>? _transactionSubscription;
+
+  // Hold the pending-count stream on State so we don't open a fresh Firestore
+  // listener every rebuild. Previously the stream was created inline in build().
+  late final Stream<int> _pendingCountStream;
 
   @override
   void initState() {
     super.initState();
-    _initTransactionListener();
-  }
-
-  @override
-  void dispose() {
-    _transactionSubscription?.cancel();
-    super.dispose();
-  }
-
-  void _initTransactionListener() {
-    _transactionSubscription =
-        NotificationService().detectedTransactionStream.listen((transaction) {
-      if (mounted) {
-        _showTransactionPopup(transaction);
-      }
-    });
-  }
-
-  void _showTransactionPopup(PendingTransaction transaction) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-        child: Dialog(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          child: DesignSystemCard(
-            glass: true,
-            padding: const EdgeInsets.all(AppDesignSystem.s24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppDesignSystem.brandPrimary.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_wallet_rounded,
-                    color: AppDesignSystem.brandPrimary,
-                    size: 40,
-                  ),
-                ),
-                const VSpace.md(),
-                Text(
-                  'Transaction Detected',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const VSpace.sm(),
-                Text(
-                  'We detected a potential expense from ${transaction.appName}',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.7),
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const VSpace.lg(),
-                DesignSystemCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              transaction.merchantName,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              'Via ${transaction.appName}',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const HSpace.md(),
-                      Text(
-                        '₹${transaction.amount.toStringAsFixed(2)}',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  color: AppDesignSystem.brandPrimary,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                      ),
-                    ],
-                  ),
-                ),
-                const VSpace.xl(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: SecondaryButton(
-                        text: 'Discard',
-                        onPressed: () async {
-                          await PendingTransactionService()
-                              .deletePendingTransaction(transaction.id);
-                          if (context.mounted) Navigator.pop(context);
-                        },
-                      ),
-                    ),
-                    const HSpace.md(),
-                    Expanded(
-                      child: GradientButton(
-                        text: 'Add Entry',
-                        onPressed: () async {
-                          final expense = Expense(
-                            id: transaction.id,
-                            title: transaction.merchantName,
-                            amount: transaction.amount,
-                            date: transaction.detectedAt,
-                            category: transaction.suggestedCategory ?? 'Other',
-                            description: 'Auto-detected via notification',
-                            type: TransactionType.expense,
-                            paymentMethod: transaction.appName,
-                          );
-
-                          await FirestoreService().addExpense(expense);
-                          await PendingTransactionService()
-                              .deletePendingTransaction(transaction.id);
-
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            showDesignSystemSnackBar(
-                              context: context,
-                              message: 'Expense added successfully',
-                              icon: Icons.check_circle_rounded,
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    _pendingCountStream =
+        PendingTransactionService().getPendingTransactionCount();
   }
 
   final List<Widget> _pages = const [
@@ -237,7 +79,7 @@ class _MainScaffoldState extends State<MainScaffold>
 
   Widget _buildPendingTransactionsFAB() {
     return StreamBuilder<int>(
-      stream: PendingTransactionService().getPendingTransactionCount(),
+      stream: _pendingCountStream,
       builder: (context, snapshot) {
         final count = snapshot.data ?? 0;
 
@@ -250,17 +92,13 @@ class _MainScaffoldState extends State<MainScaffold>
           child: FloatingActionButton.extended(
             backgroundColor: AppDesignSystem.brandPrimary,
             onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const PendingTransactionsScreen(),
-                ),
-              );
+              Navigator.pushNamed(context, '/scan');
             },
             icon: Badge(
               label: Text(count.toString()),
               child: const Icon(Icons.notifications_active_rounded),
             ),
-            label: const Text('Review'),
+            label: const Text('Inbox'),
           ),
         );
       },
@@ -274,17 +112,17 @@ class _MainScaffoldState extends State<MainScaffold>
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 0),
           ),
@@ -292,7 +130,7 @@ class _MainScaffoldState extends State<MainScaffold>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Container(
+        child: SizedBox(
           height: 80,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -401,23 +239,27 @@ class _ModernNavItemState extends State<_ModernNavItem>
     final Color activeColor = Theme.of(context).colorScheme.primary;
     final Color inactiveColor = Theme.of(
       context,
-    ).colorScheme.onSurface.withOpacity(0.6);
+    ).colorScheme.onSurface.withValues(alpha: 0.6);
 
     return Expanded(
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
+      child: Semantics(
+        button: true,
+        selected: widget.isActive,
+        label: widget.label,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: widget.isActive
-                ? activeColor.withOpacity(0.1)
+                ? activeColor.withValues(alpha: 0.1)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(16),
             border: widget.isActive
-                ? Border.all(color: activeColor.withOpacity(0.3), width: 1)
+                ? Border.all(color: activeColor.withValues(alpha: 0.3), width: 1)
                 : null,
           ),
           child: Column(
@@ -468,6 +310,7 @@ class _ModernNavItemState extends State<_ModernNavItem>
               ),
             ],
           ),
+        ),
         ),
       ),
     );

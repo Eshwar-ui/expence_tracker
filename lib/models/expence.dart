@@ -33,7 +33,7 @@ class Expense {
       'id': id,
       'title': title,
       'amount': amount,
-      'date': date.toIso8601String(),
+      'date': Timestamp.fromDate(date),
       'category': category,
       'description': description,
       'type': type.name,
@@ -69,6 +69,7 @@ class Expense {
     if (value == null) return DateTime.now();
     if (value is Timestamp) return value.toDate();
     if (value is String) return DateTime.parse(value);
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
     return DateTime.now();
   }
 

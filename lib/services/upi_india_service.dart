@@ -165,7 +165,7 @@ class UpiIndiaService {
                       leading: CircleAvatar(
                         backgroundColor: Theme.of(
                           context,
-                        ).colorScheme.primary.withOpacity(0.1),
+                        ).colorScheme.primary.withValues(alpha: 0.1),
                         child: Icon(
                           Icons.payment,
                           color: Theme.of(context).colorScheme.primary,
@@ -183,7 +183,7 @@ class UpiIndiaService {
                         size: 16,
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withOpacity(0.4),
+                        ).colorScheme.onSurface.withValues(alpha: 0.4),
                       ),
                       onTap: () {
                         Navigator.pop(context, app);
@@ -377,11 +377,11 @@ class UpiIndiaService {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
             Icon(Icons.check_circle, color: Colors.green, size: 28),
-            const SizedBox(width: 12),
-            const Text('Payment Successful'),
+            SizedBox(width: 12),
+            Text('Payment Successful'),
           ],
         ),
         content: Column(
@@ -412,11 +412,11 @@ class UpiIndiaService {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
             Icon(Icons.error, color: Colors.red, size: 28),
-            const SizedBox(width: 12),
-            const Text('Payment Failed'),
+            SizedBox(width: 12),
+            Text('Payment Failed'),
           ],
         ),
         content: Text('Payment could not be completed.\n\nError: $error'),

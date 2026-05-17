@@ -1,103 +1,105 @@
-import 'package:flutter/material.dart';
-import 'package:video_player/video_player.dart';
-import 'package:expence_tracker/utils/app_design_system.dart';
 import 'dart:async';
 
+import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/auth_wrapper.dart';
+import 'package:flutter/material.dart';
 
-class VideoSplashScreen extends StatefulWidget {
-  const VideoSplashScreen({super.key});
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<VideoSplashScreen> createState() => _VideoSplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _VideoSplashScreenState extends State<VideoSplashScreen> {
-  late VideoPlayerController _controller;
-  bool _isInitialized = false;
+class _SplashScreenState extends State<SplashScreen> {
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _initializeVideo();
-  }
-
-  Future<void> _initializeVideo() async {
-    _controller = VideoPlayerController.asset(
-      'assets/animations/Prompt_create_a_1080p_202602111600.mp4',
-    );
-
-    try {
-      await _controller.initialize();
-      await _controller.setVolume(0.0); // Mute the video
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-        _controller.play();
-
-        // Trim to 5 seconds for a snappier premium experience
-        const trimDuration = Duration(seconds: 5);
-        final videoDuration = _controller.value.duration;
-        final finalDuration =
-            videoDuration > trimDuration ? trimDuration : videoDuration;
-
-        Timer(finalDuration, _navigateToMainApp);
-      }
-    } catch (e) {
-      debugPrint("Error initializing splash video: $e");
-      _navigateToMainApp();
-    }
+    _timer = Timer(const Duration(milliseconds: 1200), _navigateToMainApp);
   }
 
   void _navigateToMainApp() {
-    if (mounted) {
-      Navigator.of(context).pushReplacement(
-        PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              const AuthWrapper(),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 1000),
-        ),
-      );
-    }
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            const AuthWrapper(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 350),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final gradientColors = isDark
+        ? const [Color(0xFF0F0F23), Color(0xFF161633)]
+        : [
+            theme.colorScheme.primary.withValues(alpha: 0.08),
+            theme.colorScheme.surface,
+          ];
+    final onGradient =
+        isDark ? Colors.white : theme.colorScheme.onSurface;
+
     return Scaffold(
-      backgroundColor: AppDesignSystem.darkBg,
-      body: Stack(
-        children: [
-          if (_isInitialized)
-            SizedBox.expand(
-              child: FittedBox(
-                fit: BoxFit.cover,
-                child: SizedBox(
-                  width: _controller.value.size.width,
-                  height: _controller.value.size.height,
-                  child: VideoPlayer(_controller),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: gradientColors,
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 92,
+                  height: 92,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: (isDark ? Colors.white : Colors.black)
+                        .withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child:
+                      Image.asset('assets/App_logo.png', fit: BoxFit.contain),
                 ),
-              ),
+                const SizedBox(height: 18),
+                Text(
+                  'Expense Tracker',
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: onGradient,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const SizedBox(
+                  width: 26,
+                  height: 26,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.4,
+                    color: AppDesignSystem.brandPrimary,
+                  ),
+                ),
+              ],
             ),
-          if (!_isInitialized)
-            const Center(
-              child: CircularProgressIndicator(
-                color: AppDesignSystem.brandPrimary,
-              ),
-            ),
-        ],
+          ),
+        ),
       ),
     );
   }

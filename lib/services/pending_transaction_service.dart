@@ -36,6 +36,10 @@ class PendingTransactionService {
       return snapshot.docs
           .map((doc) => PendingTransaction.fromMap(doc.data()))
           .toList();
+    }).handleError((Object error, StackTrace stackTrace) {
+      // Don't let Firestore connectivity blips kill the stream — the UI keeps
+      // its last value and can show a non-fatal error. Subscribers that care
+      // about errors specifically can still attach their own onError handler.
     });
   }
 

@@ -1,3 +1,6 @@
+// App metadata — keep in sync with `version:` in pubspec.yaml when bumped.
+const String kAppVersionLabel = 'Version 1.0.0';
+
 // UPI Payment Constants
 const String kUpiCurrency = 'INR';
 const List<String> kUpiRequiredParams = ['pa', 'pn', 'cu'];

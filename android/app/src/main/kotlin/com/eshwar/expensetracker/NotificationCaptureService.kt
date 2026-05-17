@@ -49,6 +49,7 @@ class NotificationCaptureService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName ?: return
         if (!isAllowedPackage(packageName)) {
+            Log.d(TAG, "Ignoring notification from package=$packageName because it is not in the allowlist")
             return
         }
 
@@ -57,6 +58,16 @@ class NotificationCaptureService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()
             ?: extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val timestamp = sbn.postTime
+
+        if (title.isBlank() && text.isBlank()) {
+            Log.d(TAG, "Ignoring empty notification payload from package=$packageName")
+            return
+        }
+
+        Log.i(
+            TAG,
+            "Captured notification package=$packageName title=\"$title\" text=\"$text\" timestamp=$timestamp"
+        )
 
         // Persist and forward the raw payload to Flutter on a background thread.
         NotificationChannelBridge.enqueueNotification(packageName, title, text, timestamp)
@@ -75,6 +86,7 @@ class NotificationCaptureService : NotificationListenerService() {
         val allowed = prefs().getStringSet(KEY_ALLOWED_PACKAGES, emptySet()) ?: emptySet()
         // If the allowlist is empty, skip everything to avoid capturing unintended apps.
         if (allowed.isEmpty()) {
+            Log.w(TAG, "Notification allowlist is empty; skipping package=$packageName")
             return false
         }
         return allowed.contains(packageName)

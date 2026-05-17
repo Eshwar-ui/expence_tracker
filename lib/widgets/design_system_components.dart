@@ -2,6 +2,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../utils/app_design_system.dart';
 
+const String _rupee = '\u20B9';
+
 /// Reusable Modern Design System Components
 /// Refined for Marketplace-level Experience.
 
@@ -149,19 +151,19 @@ class DesignSystemCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: glass
             ? (isDark
-                ? Colors.white.withOpacity(0.05)
-                : Colors.white.withOpacity(0.6))
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.white.withValues(alpha: 0.6))
             : theme.cardTheme.color,
         borderRadius: BorderRadius.circular(AppDesignSystem.r24),
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.12)
-              : Colors.white.withOpacity(0.5),
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.5),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -232,8 +234,8 @@ class PremiumAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
           centerTitle: centerTitle,
           backgroundColor: isDark
-              ? Colors.black.withOpacity(0.1)
-              : Colors.white.withOpacity(0.3),
+              ? Colors.black.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.3),
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: showBackButton && Navigator.canPop(context)
@@ -293,7 +295,7 @@ class PremiumTransactionTile extends StatelessWidget {
             decoration: BoxDecoration(
               color:
                   (isIncome ? AppDesignSystem.success : AppDesignSystem.error)
-                      .withOpacity(0.1),
+                      .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppDesignSystem.r12),
             ),
             child: Icon(
@@ -326,7 +328,7 @@ class PremiumTransactionTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isIncome ? "+" : "-"}₹${amount.toStringAsFixed(2)}',
+                '${isIncome ? "+" : "-"}$_rupee${amount.toStringAsFixed(2)}',
                 style: theme.textTheme.titleMedium?.copyWith(
                   color: isIncome
                       ? AppDesignSystem.success
@@ -361,9 +363,9 @@ class DesignSystemBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Text(
         text,
@@ -498,24 +500,24 @@ class DesignSystemTextField extends StatelessWidget {
           label,
           style: theme.textTheme.labelMedium?.copyWith(
             fontWeight: FontWeight.w600,
-            color: theme.colorScheme.onSurface.withOpacity(0.6),
+            color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+            color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
             borderRadius: BorderRadius.circular(AppDesignSystem.r16),
             border: Border.all(
               color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : theme.colorScheme.primary.withOpacity(0.1),
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : theme.colorScheme.primary.withValues(alpha: 0.1),
             ),
             boxShadow: isDark
                 ? null
                 : [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.02),
+                      color: Colors.black.withValues(alpha: 0.02),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -533,7 +535,7 @@ class DesignSystemTextField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(
-                color: theme.colorScheme.onSurface.withOpacity(0.3),
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
               ),
               prefixIcon: icon != null
                   ? Icon(icon, size: 20, color: theme.colorScheme.primary)
@@ -593,7 +595,7 @@ Future<T?> showDesignSystemDialog<T>({
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withOpacity(0.7),
+                      ).colorScheme.onSurface.withValues(alpha: 0.7),
                     ),
                 textAlign: TextAlign.center,
               ),
@@ -749,7 +751,7 @@ class _TopSnackBarState extends State<_TopSnackBar>
                           color: (widget.isError
                                   ? AppDesignSystem.error
                                   : AppDesignSystem.success)
-                              .withOpacity(0.1),
+                              .withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -793,7 +795,12 @@ class PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
-  PrimaryButton({required this.text, this.onPressed, this.isLoading = false});
+  const PrimaryButton({
+    super.key,
+    required this.text,
+    this.onPressed,
+    this.isLoading = false,
+  });
   @override
   Widget build(BuildContext context) =>
       GradientButton(text: text, onPressed: onPressed, isLoading: isLoading);

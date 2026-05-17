@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/category.dart';
@@ -85,7 +86,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                     ),
                     const VSpace.xs(),
@@ -114,7 +115,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                     ),
                     const VSpace.sm(),
@@ -153,13 +154,13 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                                     decoration: BoxDecoration(
                                       color: selectedIcon == icon
                                           ? AppDesignSystem.brandPrimary
-                                              .withOpacity(0.1)
+                                              .withValues(alpha: 0.1)
                                           : Colors.transparent,
                                       border: Border.all(
                                         color: selectedIcon == icon
                                             ? AppDesignSystem.brandPrimary
                                             : AppDesignSystem.brandPrimary
-                                                .withOpacity(0.1),
+                                                .withValues(alpha: 0.1),
                                       ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -170,7 +171,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                                             : Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
-                                                .withOpacity(0.5)),
+                                                .withValues(alpha: 0.5)),
                                   ),
                                 ))
                             .toList(),
@@ -235,7 +236,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
 
       try {
         await _categoryService.addCategory(newCat);
-        _loadCategories();
+        unawaited(_loadCategories());
         if (mounted) {
           showDesignSystemSnackBar(
             context: context,
@@ -275,12 +276,12 @@ class _CategoriesScreenState extends State<CategoriesScreen>
         ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: DesignSystemLoading())
           : TabBarView(
               controller: _tabController,
               children: [
-                _buildCategoryList(expenses),
-                _buildCategoryList(incomes),
+                _buildCategoryList(expenses, isIncome: false),
+                _buildCategoryList(incomes, isIncome: true),
               ],
             ),
       floatingActionButton: FloatingActionButton(
@@ -290,9 +291,20 @@ class _CategoriesScreenState extends State<CategoriesScreen>
     );
   }
 
-  Widget _buildCategoryList(List<Category> categories) {
+  Widget _buildCategoryList(List<Category> categories,
+      {required bool isIncome}) {
     if (categories.isEmpty) {
-      return const Center(child: Text('No categories found.'));
+      return DesignSystemEmptyState(
+        icon: isIncome
+            ? Icons.account_balance_wallet_outlined
+            : Icons.category_outlined,
+        title: isIncome ? 'No income categories yet' : 'No expense categories yet',
+        message: 'Tap the + button to create one.',
+        action: GradientButton(
+          text: 'Add category',
+          onPressed: () => _addOrEditCategory(),
+        ),
+      );
     }
 
     return ListView.builder(
@@ -305,7 +317,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: CircleAvatar(
-              backgroundColor: AppDesignSystem.brandPrimary.withOpacity(0.1),
+              backgroundColor: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
               child: Icon(cat.icon, color: AppDesignSystem.brandPrimary),
             ),
             title: Text(cat.name,
@@ -334,21 +346,19 @@ class _CategoriesScreenState extends State<CategoriesScreen>
                             onConfirm: () async {
                               try {
                                 await _categoryService.deleteCategory(cat.id);
-                                _loadCategories();
-                                if (mounted) {
-                                  showDesignSystemSnackBar(
-                                    context: context,
-                                    message: 'Category deleted successfully',
-                                  );
-                                }
-                              } catch (e) {
-                                if (mounted) {
-                                  showDesignSystemSnackBar(
-                                    context: context,
-                                    message: 'Failed to delete category: $e',
-                                    isError: true,
-                                  );
-                                }
+                                unawaited(_loadCategories());
+                                if (!context.mounted) return;
+                                showDesignSystemSnackBar(
+                                  context: context,
+                                  message: 'Category deleted successfully',
+                                );
+                              } catch (_) {
+                                if (!context.mounted) return;
+                                showDesignSystemSnackBar(
+                                  context: context,
+                                  message: "Couldn't delete category.",
+                                  isError: true,
+                                );
                               }
                             },
                           );
@@ -367,7 +377,7 @@ class _CategoriesScreenState extends State<CategoriesScreen>
       label: Text(label),
       selected: selected,
       onSelected: (_) => onSelected(),
-      selectedColor: AppDesignSystem.brandPrimary.withOpacity(0.2),
+      selectedColor: AppDesignSystem.brandPrimary.withValues(alpha: 0.2),
       labelStyle: TextStyle(
         color: selected
             ? AppDesignSystem.brandPrimary

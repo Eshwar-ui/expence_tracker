@@ -3,6 +3,8 @@ import '../models/analytics.dart';
 import 'firestore_service.dart';
 import 'budget_service.dart';
 
+const String _rupee = '\u20B9';
+
 class AnalyticsService {
   final FirestoreService _firestoreService = FirestoreService();
 
@@ -14,12 +16,21 @@ class AnalyticsService {
     try {
       final now = DateTime.now();
       final start = startDate ?? DateTime(now.year, now.month, 1);
-      final end = endDate ?? now;
+      // If a date-only endDate is passed, push it to the end of that day so
+      // transactions logged later in the day aren't excluded by midnight
+      // comparison. Falling back to `now` keeps "up to now" semantics.
+      final DateTime end;
+      if (endDate == null) {
+        end = now;
+      } else if (endDate.hour == 0 &&
+          endDate.minute == 0 &&
+          endDate.second == 0) {
+        end = DateTime(endDate.year, endDate.month, endDate.day, 23, 59, 59);
+      } else {
+        end = endDate;
+      }
 
-      // Fetch all expenses once
       final allExpenses = await _firestoreService.getExpenses();
-
-      // Filter expenses in the date range (inclusive of both start and end dates)
       final expenses = allExpenses.where((e) {
         return !e.date.isBefore(start) && !e.date.isAfter(end);
       }).toList();
@@ -305,7 +316,7 @@ class AnalyticsService {
         SpendingInsight(
           title: 'Top Spending Category',
           description:
-              'You spent most on ${topCategory.key}: ₹${topCategory.value.toStringAsFixed(0)}',
+              'You spent most on ${topCategory.key}: $_rupee${topCategory.value.toStringAsFixed(0)}',
           type: InsightType.info,
           amount: topCategory.value,
           category: topCategory.key,
@@ -321,7 +332,7 @@ class AnalyticsService {
       SpendingInsight(
         title: 'Daily Average',
         description:
-            'You spend ₹${averageDailySpending.toStringAsFixed(0)} per day on average.',
+            'You spend $_rupee${averageDailySpending.toStringAsFixed(0)} per day on average.',
         type: InsightType.tip,
         amount: averageDailySpending,
       ),

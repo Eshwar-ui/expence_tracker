@@ -39,14 +39,17 @@ object NotificationChannelBridge {
 
     fun attach(context: Context, messenger: BinaryMessenger) {
         appContext = context.applicationContext
+        Log.i(TAG, "Attaching notification bridge for package=${context.packageName}")
 
         EventChannel(messenger, EVENT_CHANNEL).setStreamHandler(object : EventChannel.StreamHandler {
             override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                 eventSink = events
+                Log.i(TAG, "Flutter event listener attached")
                 dispatchPending()
             }
 
             override fun onCancel(arguments: Any?) {
+                Log.i(TAG, "Flutter event listener detached")
                 eventSink = null
             }
         })
@@ -76,6 +79,10 @@ object NotificationChannelBridge {
     ) {
         executor.execute {
             val payload = buildPayload(packageName, title, text, timestamp)
+            Log.i(
+                TAG,
+                "Queueing notification package=$packageName title=\"$title\" text=\"$text\" timestamp=$timestamp"
+            )
             try {
                 saveLast(payload)
                 appendPending(payload)
@@ -101,6 +108,7 @@ object NotificationChannelBridge {
             prefs(context).edit()
                 .putStringSet(NotificationCaptureService.KEY_ALLOWED_PACKAGES, list.toSet())
                 .apply()
+            Log.i(TAG, "Stored ${list.size} allowed notification packages")
             mainHandler.post { result.success(true) }
         }
     }
@@ -151,6 +159,7 @@ object NotificationChannelBridge {
         }
         executor.execute {
             val pending = readPending(context)
+            Log.i(TAG, "Returning ${pending.size} pending notifications to Flutter")
             clearPending(context)
             mainHandler.post { result.success(pending) }
         }
@@ -210,8 +219,10 @@ object NotificationChannelBridge {
         executor.execute {
             val pending = readPending(context)
             if (pending.isEmpty()) {
+                Log.d(TAG, "No queued notifications to dispatch")
                 return@execute
             }
+            Log.i(TAG, "Dispatching ${pending.size} queued notifications to Flutter")
             for (item in pending) {
                 emit(item)
             }
@@ -224,6 +235,7 @@ object NotificationChannelBridge {
         mainHandler.post {
             try {
                 sink.success(payload)
+                Log.d(TAG, "Emitted notification to Flutter package=${payload["packageName"]}")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to emit payload", e)
             }
@@ -238,16 +250,26 @@ object NotificationChannelBridge {
             .putString(NotificationCaptureService.KEY_LAST_TEXT, payload["text"] as String)
             .putLong(NotificationCaptureService.KEY_LAST_TIMESTAMP, payload["timestamp"] as Long)
             .apply()
+        Log.d(TAG, "Saved last notification package=${payload["packageName"]}")
     }
 
     private fun appendPending(payload: Map<String, Any>) {
         val context = appContext ?: return
         val list = readPendingArray(context)
+        val newKey = payloadKey(payload)
+        for (i in 0 until list.length()) {
+            val existing = list.optJSONObject(i) ?: continue
+            if (payloadKey(existing) == newKey) {
+                Log.d(TAG, "Skipping duplicate pending notification key=$newKey")
+                return
+            }
+        }
         list.put(JSONObject(payload))
         while (list.length() > MAX_PENDING) {
             list.remove(0)
         }
         prefs(context).edit().putString(KEY_PENDING, list.toString()).apply()
+        Log.d(TAG, "Pending notification queue size=${list.length()}")
     }
 
     private fun readPending(context: Context): List<Map<String, Any>> {
@@ -300,6 +322,22 @@ object NotificationChannelBridge {
             return null
         }
         return buildPayload(packageName, title, text, timestamp)
+    }
+
+    private fun payloadKey(payload: Map<String, Any>): String {
+        val packageName = payload["packageName"] as? String ?: ""
+        val title = payload["title"] as? String ?: ""
+        val text = payload["text"] as? String ?: ""
+        val timestamp = payload["timestamp"] as? Long ?: 0L
+        return "$packageName|$title|$text|$timestamp"
+    }
+
+    private fun payloadKey(payload: JSONObject): String {
+        val packageName = payload.optString("packageName", "")
+        val title = payload.optString("title", "")
+        val text = payload.optString("text", "")
+        val timestamp = payload.optLong("timestamp", 0L)
+        return "$packageName|$title|$text|$timestamp"
     }
 
     private fun isNotificationListenerEnabled(context: Context): Boolean {

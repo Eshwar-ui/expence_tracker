@@ -1,7 +1,6 @@
 import 'package:expence_tracker/screens/home.dart';
 import 'package:expence_tracker/screens/auth_screen.dart';
 import 'package:expence_tracker/screens/profile_screen.dart';
-import 'package:expence_tracker/screens/scan_screen.dart';
 import 'package:expence_tracker/screens/main_scaffold.dart';
 import 'package:expence_tracker/screens/transactions_screen.dart';
 import 'package:expence_tracker/screens/reports_screen.dart';
@@ -9,11 +8,11 @@ import 'package:expence_tracker/screens/budget_planner_screen.dart';
 import 'package:expence_tracker/screens/recurring_transactions_screen.dart';
 import 'package:expence_tracker/screens/ai_predictions_screen.dart';
 import 'package:expence_tracker/screens/categories_screen.dart';
+import 'package:expence_tracker/screens/smart_inbox_screen.dart';
 import 'package:expence_tracker/firebase_options.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:expence_tracker/services/notification_service.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:expence_tracker/screens/splash_screen.dart';
@@ -22,14 +21,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:expence_tracker/services/app_icon_switcher.dart';
 
-// Background message handler
-@pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  debugPrint("Handling a background message: ${message.messageId}");
-}
-
-void main() async {
+void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
@@ -40,28 +32,26 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // Initialize notification service
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    await NotificationService().initialize();
+    await FirebaseCrashlytics.instance
+        .setCrashlyticsCollectionEnabled(!kDebugMode);
 
-    // Pass all uncaught "asynchronous" errors to FlutterError.onError.
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
-      // TODO: Log to Sentry/Crashlytics in the future
-      if (kReleaseMode) {
-        // Handle release mode error logging
-      }
+      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
     };
 
-    // Pass all uncaught errors from the framework to PlatformDispatcher.instance.onError.
     PlatformDispatcher.instance.onError = (error, stack) {
-      // TODO: Log to Sentry/Crashlytics in the future
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        stack,
+        fatal: true,
+      );
       return true;
     };
 
     runApp(const MyApp());
   }, (error, stack) {
-    // Catch errors outside of the Flutter framework
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
     debugPrint('Uncaught error: $error');
   });
 }
@@ -120,12 +110,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           child: child!,
         );
       },
-      home: const VideoSplashScreen(),
+      home: const SplashScreen(),
       routes: {
         '/auth': (context) => const AuthScreen(),
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
-        '/scan': (context) => const ScanScreen(),
+        '/scan': (context) => const SmartInboxScreen(),
         '/transactions': (context) => const TransactionsScreen(),
         '/reports': (context) => const ReportsScreen(),
         '/budget': (context) => const BudgetPlannerScreen(),

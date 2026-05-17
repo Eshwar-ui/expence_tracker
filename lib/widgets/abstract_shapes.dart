@@ -35,17 +35,17 @@ class AbstractShapes extends StatelessWidget {
             Positioned(
               top: -40,
               left: -30,
-              child: _blob(120, Colors.white.withOpacity(0.06)),
+              child: _blob(120, Colors.white.withValues(alpha: 0.06)),
             ),
             Positioned(
               bottom: -30,
               right: -20,
-              child: _blob(140, Colors.white.withOpacity(0.08)),
+              child: _blob(140, Colors.white.withValues(alpha: 0.08)),
             ),
             Positioned(
               top: 30,
               right: -40,
-              child: _blob(90, Colors.white.withOpacity(0.05)),
+              child: _blob(90, Colors.white.withValues(alpha: 0.05)),
             ),
           ],
         ),

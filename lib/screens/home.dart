@@ -1,16 +1,23 @@
+import 'dart:async';
 import 'dart:ui';
-import 'package:expence_tracker/models/expence.dart';
-import 'package:expence_tracker/models/analytics.dart';
 
+import 'package:expence_tracker/models/analytics.dart';
+import 'package:expence_tracker/models/expence.dart';
+import 'package:expence_tracker/screens/ai_predictions_screen.dart';
 import 'package:expence_tracker/screens/scan_upi_screen.dart';
+import 'package:expence_tracker/screens/smart_inbox_screen.dart';
 import 'package:expence_tracker/services/analytics_service.dart';
+import 'package:expence_tracker/services/home_balance_widget_service.dart';
+import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/services/recurring_transaction_service.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../utils/app_design_system.dart';
 import 'expense_dialog.dart';
-import 'ai_predictions_screen.dart';
+
+const String _rupee = '\u20B9';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,17 +27,22 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  AnalyticsData? _analyticsData;
-  bool _isLoading = true;
-  late AnimationController _animationController;
-
   final AnalyticsService _analyticsService = AnalyticsService();
+  final PendingTransactionService _pendingTransactionService =
+      PendingTransactionService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  AnalyticsData? _analyticsData;
   User? _user;
+  bool _isLoading = true;
+  String? _loadError;
+  late final AnimationController _animationController;
 
   String get _firstName {
     final name = _user?.displayName?.trim();
-    if (name == null || name.isEmpty) return 'User';
+    if (name == null || name.isEmpty) {
+      return 'User';
+    }
     return name.split(' ').first;
   }
 
@@ -53,13 +65,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadExpenses() async {
     if (!mounted) return;
-    setState(() => _isLoading = true);
+
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
     try {
-      // Execute recurring transactions first (don't let it block data loading)
       try {
         await RecurringTransactionService().executeDueTransactions();
       } catch (_) {
-        // Ignore recurring transaction errors - they shouldn't block data loading
+        // Recurring execution should not block the dashboard.
       }
 
       final now = DateTime.now();
@@ -71,15 +87,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         endDate: end,
       );
 
+      await HomeBalanceWidgetService.updateFromAnalytics(data);
+
       if (!mounted) return;
       setState(() {
         _analyticsData = data;
         _isLoading = false;
+        _loadError = null;
       });
-      _animationController.forward();
-    } catch (e) {
+
+      unawaited(_animationController.forward(from: 0));
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _loadError = 'Unable to load the dashboard right now.';
+      });
     }
   }
 
@@ -88,7 +111,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Gradient Orbits
           Positioned(
             top: -100,
             right: -100,
@@ -97,7 +119,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppDesignSystem.brandPrimary.withOpacity(0.25),
+                color: AppDesignSystem.brandPrimary.withValues(alpha: 0.25),
               ),
             ),
           ),
@@ -109,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               height: 400,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppDesignSystem.brandSecondary.withOpacity(0.2),
+                color: AppDesignSystem.brandSecondary.withValues(alpha: 0.2),
               ),
             ),
           ),
@@ -121,19 +143,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               height: 250,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppDesignSystem.brandAccent.withOpacity(0.15),
+                color: AppDesignSystem.brandAccent.withValues(alpha: 0.15),
               ),
             ),
           ),
-
-          // Ambient Blur Layer for Mesh Gradient Effect
           Positioned.fill(
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
               child: Container(color: Colors.transparent),
             ),
           ),
-
           SafeArea(
             child: RefreshIndicator(
               onRefresh: _loadExpenses,
@@ -151,7 +170,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         children: [
                           _buildWalletCard(),
                           const VSpace.xl(),
+                          _buildStatusBanner(),
+                          if (_loadError != null) const VSpace.md(),
+                          _buildOverviewGrid(),
+                          const VSpace.xl(),
                           _buildQuickActions(),
+                          const VSpace.xl(),
+                          _buildInsightCard(),
                           const VSpace.xl(),
                           _buildRecentTransactionsHeader(),
                           const VSpace.md(),
@@ -189,13 +214,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: theme.colorScheme.primary.withOpacity(0.2),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.2),
                   width: 2,
                 ),
               ),
               child: CircleAvatar(
                 radius: 28,
-                backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
                 backgroundImage: _user?.photoURL != null
                     ? NetworkImage(_user!.photoURL!)
                     : null,
@@ -213,7 +238,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildWalletCard() {
     if (_isLoading) {
       return Container(
-        height: 200,
+        height: 240,
         decoration: BoxDecoration(
           color: Theme.of(context).cardTheme.color,
           borderRadius: BorderRadius.circular(AppDesignSystem.r24),
@@ -222,8 +247,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
 
-    final balance = _analyticsData?.balance ?? 0.0;
-
+    final data = _analyticsData;
+    final balance = data?.balance ?? 0.0;
+    final budgetUtilization =
+        data?.budgetStatus.budgetUtilizationPercentage.round() ?? 0;
+    final savingsRate = data?.savingsPercentage.round() ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return DesignSystemCard(
@@ -233,12 +261,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         padding: const EdgeInsets.all(AppDesignSystem.s24),
         decoration: BoxDecoration(
           color: isDark ? null : Colors.white,
-          gradient:
-              isDark ? AppDesignSystem.primaryGradient.withOpacity(0.1) : null,
+          gradient: isDark
+              // ignore: deprecated_member_use_from_same_package
+              ? AppDesignSystem.primaryGradient.withOpacity(0.1)
+              : null,
           border: isDark
               ? null
               : Border.all(
-                  color: AppDesignSystem.brandPrimary.withOpacity(0.1),
+                  color: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
                 ),
           borderRadius: BorderRadius.circular(AppDesignSystem.r24),
         ),
@@ -248,9 +278,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Total Balance',
-                  style: Theme.of(context).textTheme.titleMedium,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cash Position',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const VSpace.xs(),
+                    Text(
+                      _monthLabel(DateTime.now()),
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
                 const Icon(
                   Icons.account_balance_wallet_rounded,
@@ -260,24 +300,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
             const VSpace.sm(),
             Text(
-              '₹${balance.toStringAsFixed(2)}',
+              '$_rupee${balance.toStringAsFixed(2)}',
               style: Theme.of(context).textTheme.displayMedium,
+            ),
+            const VSpace.sm(),
+            Text(
+              budgetUtilization == 0
+                  ? 'No monthly budget tracked yet'
+                  : '$budgetUtilization% of your budget is already used',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const VSpace.xl(),
             Row(
               children: [
                 _buildStatItem(
                   'Income',
-                  _analyticsData?.totalIncome ?? 0,
+                  data?.totalIncome ?? 0,
                   AppDesignSystem.success,
                 ),
                 const HSpace(AppDesignSystem.s32),
                 _buildStatItem(
                   'Spent',
-                  _analyticsData?.totalExpenses ?? 0,
+                  data?.totalExpenses ?? 0,
                   AppDesignSystem.error,
                 ),
               ],
+            ),
+            const VSpace.lg(),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+              child: LinearProgressIndicator(
+                value: (savingsRate / 100).clamp(0, 1),
+                minHeight: 10,
+                backgroundColor: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.08),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppDesignSystem.brandSecondary,
+                ),
+              ),
+            ),
+            const VSpace.sm(),
+            Text(
+              'Savings rate this month: $savingsRate%',
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
@@ -301,79 +368,367 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
         Text(
-          '₹${amount.toStringAsFixed(0)}',
+          '$_rupee${amount.toStringAsFixed(0)}',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
         ),
       ],
     );
   }
 
-  Widget _buildQuickActions() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _buildActionItem(Icons.add_rounded, 'Add', () {
-          showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (context) =>
-                ExpenseDialog(onTransactionSaved: _loadExpenses),
-          );
-        }),
-        _buildActionItem(Icons.payments_rounded, 'Pay', () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const ScanUPIScreen()),
-          );
-        }),
-        _buildActionItem(Icons.auto_awesome_rounded, 'AI Advice', () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AIPredictionsScreen(),
+  Widget _buildStatusBanner() {
+    if (_loadError == null) {
+      return const SizedBox.shrink();
+    }
+
+    return DesignSystemCard(
+      glass: true,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppDesignSystem.s12),
+            decoration: BoxDecoration(
+              color: AppDesignSystem.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDesignSystem.r12),
             ),
-          );
-        }),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: AppDesignSystem.warning,
+            ),
+          ),
+          const HSpace.md(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Dashboard needs attention',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const VSpace.xs(),
+                Text(
+                  _loadError!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: _loadExpenses, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOverviewGrid() {
+    final data = _analyticsData;
+    final trends = data?.trends ?? const <TransactionTrend>[];
+    final topCategory = _topCategoryEntry(data?.categoryBreakdown);
+    final todayNet = trends.isNotEmpty ? trends.last.balance : 0.0;
+    final budgetUsed = data?.budgetStatus.budgetUtilizationPercentage ?? 0.0;
+
+    return StreamBuilder<int>(
+      stream: _pendingTransactionService.getPendingTransactionCount(),
+      builder: (context, snapshot) {
+        final pendingCount = snapshot.data ?? 0;
+
+        return Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _buildOverviewCard(
+                    title: 'Pending Review',
+                    value: pendingCount.toString(),
+                    helper: pendingCount == 0
+                        ? 'Inbox is clear'
+                        : 'Needs confirmation',
+                    icon: Icons.inbox_rounded,
+                    color: AppDesignSystem.brandPrimary,
+                  ),
+                ),
+                const HSpace.md(),
+                Expanded(
+                  child: _buildOverviewCard(
+                    title: 'Budget Used',
+                    value: '${budgetUsed.round()}%',
+                    helper: data == null || data.budgetStatus.totalBudget == 0
+                        ? 'No budget set'
+                        : '$_rupee${data.budgetStatus.remainingBudget.toStringAsFixed(0)} left',
+                    icon: Icons.pie_chart_rounded,
+                    color: AppDesignSystem.brandAccent,
+                  ),
+                ),
+              ],
+            ),
+            const VSpace.md(),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildOverviewCard(
+                    title: 'Today Net',
+                    value:
+                        '${todayNet >= 0 ? '+' : '-'}$_rupee${todayNet.abs().toStringAsFixed(0)}',
+                    helper: 'Net movement today',
+                    icon: todayNet >= 0
+                        ? Icons.trending_up_rounded
+                        : Icons.trending_down_rounded,
+                    color: todayNet >= 0
+                        ? AppDesignSystem.success
+                        : AppDesignSystem.error,
+                  ),
+                ),
+                const HSpace.md(),
+                Expanded(
+                  child: _buildOverviewCard(
+                    title: 'Top Category',
+                    value: topCategory?.key ?? 'None',
+                    helper: topCategory == null
+                        ? 'No expense activity yet'
+                        : '$_rupee${topCategory.value.toStringAsFixed(0)} this month',
+                    icon: Icons.local_offer_rounded,
+                    color: AppDesignSystem.brandInfo,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOverviewCard({
+    required String title,
+    required String value,
+    required String helper,
+    required IconData icon,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    final theme = Theme.of(context);
+    return DesignSystemCard(
+      glass: true,
+      onTap: onTap,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppDesignSystem.s12),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppDesignSystem.r12),
+                ),
+                child: Icon(icon, color: color, size: 18),
+              ),
+              const Spacer(),
+              if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  size: 16,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
+                ),
+            ],
+          ),
+          const VSpace.md(),
+          Text(title, style: theme.textTheme.bodySmall),
+          const VSpace.xs(),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.titleLarge,
+          ),
+          const VSpace.sm(),
+          Text(
+            helper,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Wrap(
+      spacing: AppDesignSystem.s12,
+      runSpacing: AppDesignSystem.s12,
+      children: [
+        _buildActionItem(
+          icon: Icons.add_rounded,
+          label: 'Add',
+          description: 'Manual entry',
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (context) =>
+                  ExpenseDialog(onTransactionSaved: _loadExpenses),
+            );
+          },
+        ),
+        _buildActionItem(
+          icon: Icons.inbox_rounded,
+          label: 'Inbox',
+          description: 'SMS and alerts',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SmartInboxScreen()),
+            );
+          },
+        ),
+        _buildActionItem(
+          icon: Icons.payments_rounded,
+          label: 'Pay',
+          description: 'UPI tools',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ScanUPIScreen()),
+            );
+          },
+        ),
+        _buildActionItem(
+          icon: Icons.auto_awesome_rounded,
+          label: 'AI Advice',
+          description: 'Forecasts',
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const AIPredictionsScreen(),
+              ),
+            );
+          },
+        ),
       ],
     );
   }
 
-  Widget _buildActionItem(IconData icon, String label, VoidCallback onTap) {
+  Widget _buildActionItem({
+    required IconData icon,
+    required String label,
+    required String description,
+    required VoidCallback onTap,
+  }) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDesignSystem.r16),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(AppDesignSystem.s16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(AppDesignSystem.r16),
-              border: Border.all(
-                color: theme.colorScheme.primary.withOpacity(0.1),
+    final cardWidth = (MediaQuery.of(context).size.width -
+            (AppDesignSystem.s24 * 2) -
+            AppDesignSystem.s12) /
+        2;
+
+    return SizedBox(
+      width: cardWidth,
+      child: DesignSystemCard(
+        glass: true,
+        onTap: onTap,
+        padding: const EdgeInsets.all(AppDesignSystem.s16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppDesignSystem.s16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                ),
+              ),
+              child: Icon(icon, color: theme.colorScheme.primary, size: 24),
+            ),
+            const VSpace.md(),
+            Text(label, style: theme.textTheme.titleMedium),
+            const VSpace.xs(),
+            Text(description, style: theme.textTheme.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInsightCard() {
+    if (_isLoading) {
+      return const SizedBox.shrink();
+    }
+
+    final theme = Theme.of(context);
+    final insight = _analyticsData?.insights.isNotEmpty == true
+        ? _analyticsData!.insights.first
+        : null;
+    final topCategory = _topCategoryEntry(_analyticsData?.categoryBreakdown);
+
+    if (insight == null && topCategory == null) {
+      return DesignSystemCard(
+        glass: true,
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppDesignSystem.s12),
+              decoration: BoxDecoration(
+                color: AppDesignSystem.brandSecondary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppDesignSystem.r12),
+              ),
+              child: const Icon(
+                Icons.check_circle_outline_rounded,
+                color: AppDesignSystem.brandSecondary,
               ),
             ),
-            child: Icon(icon, color: theme.colorScheme.primary, size: 28),
+            const HSpace.md(),
+            Expanded(
+              child: Text(
+                'Add a few transactions to unlock spending insights and forecasting.',
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final tone = _insightColor(insight?.type);
+    final title = insight?.title ?? 'Spending focus';
+    final description = insight?.description ??
+        'Most of this month\'s spend is in ${topCategory!.key.toLowerCase()}.';
+
+    return DesignSystemCard(
+      glass: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppDesignSystem.s12),
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDesignSystem.r12),
+            ),
+            child: Icon(Icons.insights_rounded, color: tone),
           ),
-          const VSpace.sm(),
-          Text(label, style: theme.textTheme.labelMedium),
+          const HSpace.md(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: theme.textTheme.titleMedium),
+                const VSpace.xs(),
+                Text(description, style: theme.textTheme.bodySmall),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildRecentTransactionsHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text('Recent Activity', style: Theme.of(context).textTheme.titleLarge),
-        TextButton(
-          onPressed: () => Navigator.pushNamed(context, '/transactions'),
-          child: const Text('View All'),
-        ),
-      ],
+    return Text(
+      'Recent Activity',
+      style: Theme.of(context).textTheme.titleLarge,
     );
   }
 
@@ -384,10 +739,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
 
-    final expenses = _analyticsData?.recentExpenses ?? [];
-    final openingBalance = _analyticsData?.openingBalance ?? 0.0;
+    if (_analyticsData == null) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppDesignSystem.s24),
+          child: DesignSystemEmptyState(
+            icon: Icons.cloud_off_rounded,
+            title: 'Dashboard unavailable',
+            message:
+                'We could not load your transactions right now. Pull to refresh or retry.',
+            action: TextButton(
+              onPressed: _loadExpenses,
+              child: const Text('Try again'),
+            ),
+          ),
+        ),
+      );
+    }
 
-    // Create a virtual transaction for opening balance if info exists
+    final expenses = [..._analyticsData!.recentExpenses]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final openingBalance = _analyticsData?.openingBalance ?? 0.0;
     final showOpening = openingBalance != 0;
 
     if (expenses.isEmpty && !showOpening) {
@@ -422,16 +794,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           }
 
           final expenseIndex = showOpening ? index - 1 : index;
-          final e = expenses[expenseIndex];
+          final expense = expenses[expenseIndex];
 
           return Padding(
             padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
             child: PremiumTransactionTile(
-              title: e.title,
-              category: e.category,
-              amount: e.amount,
-              date: e.date,
-              isIncome: e.type == TransactionType.income,
+              title: expense.title,
+              category: expense.category,
+              amount: expense.amount,
+              date: expense.date,
+              isIncome: expense.type == TransactionType.income,
               onTap: () {},
             ),
           );
@@ -444,9 +816,52 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 extension ColorExtension on LinearGradient {
   LinearGradient withOpacity(double opacity) {
     return LinearGradient(
-      colors: colors.map((c) => c.withOpacity(opacity)).toList(),
+      colors: colors.map((color) => color.withValues(alpha: opacity)).toList(),
       begin: begin,
       end: end,
     );
   }
+}
+
+MapEntry<String, double>? _topCategoryEntry(Map<String, double>? categories) {
+  if (categories == null || categories.isEmpty) {
+    return null;
+  }
+
+  final entries = categories.entries.toList()
+    ..sort((a, b) => b.value.compareTo(a.value));
+  return entries.first;
+}
+
+Color _insightColor(InsightType? type) {
+  switch (type) {
+    case InsightType.warning:
+      return AppDesignSystem.warning;
+    case InsightType.success:
+      return AppDesignSystem.success;
+    case InsightType.tip:
+      return AppDesignSystem.brandInfo;
+    case InsightType.info:
+    case null:
+      return AppDesignSystem.brandPrimary;
+  }
+}
+
+String _monthLabel(DateTime date) {
+  const months = <String>[
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+
+  return '${months[date.month - 1]} ${date.year}';
 }

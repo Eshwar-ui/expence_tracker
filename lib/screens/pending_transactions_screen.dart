@@ -1,118 +1,170 @@
-import 'package:flutter/material.dart';
-import 'package:expence_tracker/models/pending_transaction.dart';
-import 'package:expence_tracker/services/pending_transaction_service.dart';
-import 'package:expence_tracker/services/firestore_service.dart';
 import 'package:expence_tracker/models/expence.dart';
+import 'package:expence_tracker/models/pending_transaction.dart';
+import 'package:expence_tracker/services/firestore_service.dart';
+import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-class PendingTransactionsScreen extends StatelessWidget {
-  const PendingTransactionsScreen({super.key});
+const String _rupee = '\u20B9';
+
+class PendingTransactionsScreen extends StatefulWidget {
+  final bool showScaffold;
+
+  const PendingTransactionsScreen({
+    super.key,
+    this.showScaffold = true,
+  });
+
+  @override
+  State<PendingTransactionsScreen> createState() =>
+      _PendingTransactionsScreenState();
+}
+
+class _PendingTransactionsScreenState extends State<PendingTransactionsScreen> {
+  late Stream<List<PendingTransaction>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = PendingTransactionService().getPendingTransactions();
+  }
+
+  void _retry() {
+    setState(() {
+      _stream = PendingTransactionService().getPendingTransactions();
+    });
+  }
+
+  bool get showScaffold => widget.showScaffold;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final body = StreamBuilder<List<PendingTransaction>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: DesignSystemLoading());
+        }
 
-    return Scaffold(
-      backgroundColor: AppDesignSystem.darkBg,
-      appBar: AppBar(
-        backgroundColor: AppDesignSystem.darkBg,
-        title: const Text('Review Transactions'),
-        centerTitle: true,
-      ),
-      body: StreamBuilder<List<PendingTransaction>>(
-        stream: PendingTransactionService().getPendingTransactions(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
-          final transactions = snapshot.data ?? [];
-
-          if (transactions.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 80,
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                  const VSpace.lg(),
-                  Text(
-                    'All caught up!',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      color: Colors.white.withOpacity(0.6),
-                    ),
-                  ),
-                  const VSpace.sm(),
-                  Text(
-                    'No pending transactions to review',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white.withOpacity(0.4),
-                    ),
-                  ),
-                ],
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.all(AppDesignSystem.s24),
+            child: DesignSystemEmptyState(
+              icon: Icons.cloud_off_rounded,
+              title: 'Pending review unavailable',
+              message: 'We could not load detected transactions right now.',
+              action: TextButton.icon(
+                onPressed: _retry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try again'),
               ),
-            );
-          }
+            ),
+          );
+        }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: transactions.length,
-            itemBuilder: (context, index) {
-              final transaction = transactions[index];
-              return _PendingTransactionCard(
+        final transactions = snapshot.data ?? [];
+
+        if (transactions.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(AppDesignSystem.s24),
+            child: DesignSystemEmptyState(
+              icon: Icons.check_circle_outline_rounded,
+              title: 'All caught up',
+              message: 'No pending transactions need review right now.',
+            ),
+          );
+        }
+
+        final creditCount = transactions.where((item) => item.isCredit).length;
+        final debitCount = transactions.length - creditCount;
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(
+            AppDesignSystem.s24,
+            AppDesignSystem.s8,
+            AppDesignSystem.s24,
+            120,
+          ),
+          itemCount: transactions.length + 1,
+          itemBuilder: (context, index) {
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: AppDesignSystem.s16),
+                child: _InboxSummaryCard(
+                  totalCount: transactions.length,
+                  debitCount: debitCount,
+                  creditCount: creditCount,
+                ),
+              );
+            }
+
+            final transaction = transactions[index - 1];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
+              child: _PendingTransactionCard(
                 transaction: transaction,
                 onApprove: () => _approveTransaction(context, transaction),
                 onReject: () => _rejectTransaction(context, transaction),
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!showScaffold) {
+      return body;
+    }
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: const PremiumAppBar(
+        title: 'Review Transactions',
+        centerTitle: true,
       ),
+      body: body,
     );
   }
 
   Future<void> _approveTransaction(
-      BuildContext context, PendingTransaction transaction) async {
+    BuildContext context,
+    PendingTransaction transaction,
+  ) async {
     try {
-      // Create expense from pending transaction
+      final transactionType =
+          transaction.isCredit ? TransactionType.income : TransactionType.expense;
+      final category = transaction.suggestedCategory ??
+          (transaction.isCredit ? 'Income' : 'Digital Payments');
+
       final expense = Expense(
         id: transaction.id,
         title: transaction.merchantName,
         amount: transaction.amount,
         date: transaction.detectedAt,
-        category: transaction.suggestedCategory ?? 'Digital Payments',
+        category: category,
         description:
-            'Auto-detected from ${transaction.appName}\\n${transaction.rawNotificationText}',
-        type: TransactionType.expense,
+            'Auto-detected from ${transaction.appName}\n${transaction.rawNotificationText}',
+        type: transactionType,
       );
 
-      // Add expense to Firestore
       await FirestoreService().addExpense(expense);
-
-      // Delete pending transaction
-      await PendingTransactionService()
-          .deletePendingTransaction(transaction.id);
+      await PendingTransactionService().deletePendingTransaction(transaction.id);
 
       if (context.mounted) {
         showDesignSystemSnackBar(
           context: context,
-          message: 'Transaction approved: ₹${transaction.amount}',
+          message:
+              '${transaction.isCredit ? 'Income' : 'Expense'} approved: $_rupee${transaction.amount.toStringAsFixed(2)}',
         );
       }
-    } catch (e) {
+    } catch (error) {
       if (context.mounted) {
         showDesignSystemSnackBar(
           context: context,
-          message: 'Failed to approve: $e',
+          message: 'Failed to approve: $error',
           isError: true,
         );
       }
@@ -120,10 +172,11 @@ class PendingTransactionsScreen extends StatelessWidget {
   }
 
   Future<void> _rejectTransaction(
-      BuildContext context, PendingTransaction transaction) async {
+    BuildContext context,
+    PendingTransaction transaction,
+  ) async {
     try {
-      await PendingTransactionService()
-          .deletePendingTransaction(transaction.id);
+      await PendingTransactionService().deletePendingTransaction(transaction.id);
 
       if (context.mounted) {
         showDesignSystemSnackBar(
@@ -131,15 +184,69 @@ class PendingTransactionsScreen extends StatelessWidget {
           message: 'Transaction rejected',
         );
       }
-    } catch (e) {
+    } catch (error) {
       if (context.mounted) {
         showDesignSystemSnackBar(
           context: context,
-          message: 'Failed to reject: $e',
+          message: 'Failed to reject: $error',
           isError: true,
         );
       }
     }
+  }
+}
+
+class _InboxSummaryCard extends StatelessWidget {
+  final int totalCount;
+  final int debitCount;
+  final int creditCount;
+
+  const _InboxSummaryCard({
+    required this.totalCount,
+    required this.debitCount,
+    required this.creditCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DesignSystemCard(
+      glass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s20),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppDesignSystem.s12),
+            decoration: BoxDecoration(
+              color: AppDesignSystem.brandPrimary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+            ),
+            child: const Icon(
+              Icons.inbox_rounded,
+              color: AppDesignSystem.brandPrimary,
+            ),
+          ),
+          const HSpace.md(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$totalCount items need review',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const VSpace.xs(),
+                Text(
+                  '$debitCount outgoing and $creditCount incoming detections are waiting.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -158,138 +265,146 @@ class _PendingTransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final timeAgo = _getTimeAgo(transaction.detectedAt);
+    final accentColor =
+        transaction.isCredit ? AppDesignSystem.success : AppDesignSystem.brandPrimary;
+    final typeLabel = transaction.isCredit ? 'Incoming' : 'Outgoing';
+    final approveLabel = transaction.isCredit ? 'Save Income' : 'Save Expense';
+    final approveIcon =
+        transaction.isCredit ? Icons.south_west_rounded : Icons.check_rounded;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      color: AppDesignSystem.darkCanvas,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: AppDesignSystem.brandPrimary.withOpacity(0.1),
-          width: 1,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header: App name and time
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppDesignSystem.brandPrimary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    transaction.appName,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: AppDesignSystem.brandPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+    return DesignSystemCard(
+      glass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
                 ),
-                const Spacer(),
-                Text(
-                  timeAgo,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.5),
-                  ),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-              ],
-            ),
-            const VSpace.md(),
-
-            // Amount
-            Row(
-              children: [
-                Text(
-                  '₹${transaction.amount.toStringAsFixed(2)}',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    color: Colors.white,
+                child: Text(
+                  transaction.appName,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: accentColor,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Spacer(),
-                if (transaction.suggestedCategory != null)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: AppDesignSystem.brandSecondary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      transaction.suggestedCategory!,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppDesignSystem.brandSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+              ),
+              const HSpace.sm(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  typeLabel,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
-              ],
-            ),
-            const VSpace.sm(),
-
-            // Merchant
-            Text(
-              transaction.merchantName,
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: Colors.white.withOpacity(0.9),
+                ),
               ),
-            ),
-            const VSpace.sm(),
-
-            // Raw notification text (truncated)
-            Text(
-              transaction.rawNotificationText,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: Colors.white.withOpacity(0.5),
+              const Spacer(),
+              Text(timeAgo, style: theme.textTheme.bodySmall),
+            ],
+          ),
+          const VSpace.md(),
+          Row(
+            children: [
+              Text(
+                '${transaction.isCredit ? '+' : '-'}$_rupee${transaction.amount.toStringAsFixed(2)}',
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  color: accentColor,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const VSpace.lg(),
-
-            // Action buttons
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onReject,
-                    icon: const Icon(Icons.close_rounded),
-                    label: const Text('Reject'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+              const Spacer(),
+              if (transaction.suggestedCategory != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    transaction.suggestedCategory!,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: accentColor,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                const HSpace.md(),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: onApprove,
-                    icon: const Icon(Icons.check_rounded),
-                    label: const Text('Approve'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppDesignSystem.brandPrimary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
+            ],
+          ),
+          const VSpace.sm(),
+          Text(
+            transaction.merchantName,
+            style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
-              ],
+          ),
+          if ((transaction.description ?? '').isNotEmpty) ...[
+            const VSpace.xs(),
+            Text(
+              transaction.description!,
+              style: theme.textTheme.bodySmall,
             ),
           ],
-        ),
+          const VSpace.sm(),
+          Text(
+            transaction.rawNotificationText,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall,
+          ),
+          const VSpace.lg(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onReject,
+                  icon: const Icon(Icons.close_rounded),
+                  label: const Text('Reject'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppDesignSystem.error,
+                    side: const BorderSide(color: AppDesignSystem.error),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+              const HSpace.md(),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onApprove,
+                  icon: Icon(approveIcon),
+                  label: Text(approveLabel),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -300,12 +415,13 @@ class _PendingTransactionCard extends StatelessWidget {
 
     if (difference.inMinutes < 1) {
       return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else {
-      return DateFormat('MMM d, h:mm a').format(dateTime);
     }
+    if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    }
+    if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    }
+    return DateFormat('MMM d, h:mm a').format(dateTime);
   }
 }

@@ -36,103 +36,40 @@ class AIExpenseService {
     }
 
     try {
-      // Load model metadata first
       await _loadMetadata();
 
-      // Load TFLite model
-      print('📦 Loading TFLite model from $_modelPath...');
-
-      Uint8List modelBuffer;
+      final Uint8List modelBuffer;
       try {
         final modelBytes = await rootBundle.load(_modelPath);
         modelBuffer = modelBytes.buffer.asUint8List();
-
         if (modelBuffer.isEmpty) {
           throw Exception('Model file is empty');
         }
-
-        print('📦 Model file loaded: ${modelBuffer.length} bytes');
       } catch (e) {
         if (e.toString().contains('Unable to load asset') ||
             e.toString().contains('not found')) {
           throw Exception(
-            'Model file not found at $_modelPath.\n'
-            'Make sure the file exists in assets/models/ directory.\n'
-            'Run: flutter pub get and rebuild the app.',
+            'Model file not found at $_modelPath. '
+            'Make sure the asset exists and rebuild.',
           );
         }
         rethrow;
       }
 
-      // Create interpreter
+      // Interpreter.fromBuffer holds native handles, so it can't run in a
+      // background isolate via compute(). Yield one frame before the
+      // synchronous constructor so the UI can paint (splash, loaders, etc.)
+      // before the main thread gets blocked parsing the model graph.
+      await Future<void>.delayed(Duration.zero);
       _interpreter = Interpreter.fromBuffer(modelBuffer);
-
-      // Validate input/output tensors
       final inputTensors = _interpreter!.getInputTensors();
       final outputTensors = _interpreter!.getOutputTensors();
-
       if (inputTensors.isEmpty || outputTensors.isEmpty) {
         throw Exception('Invalid model: missing input or output tensors');
       }
-
-      final inputShape = inputTensors[0].shape;
-      final outputShape = outputTensors[0].shape;
-
-      // Validate expected shapes
-      if (inputShape.length != 3 ||
-          inputShape[1] != _sequenceLength ||
-          inputShape[2] != _numFeatures) {
-        print('⚠️ Input shape mismatch:');
-        print('   Expected: [1, $_sequenceLength, $_numFeatures]');
-        print('   Got: $inputShape');
-      }
-
-      if (outputShape.length != 2 || outputShape[1] != _predictionHorizon) {
-        print('⚠️ Output shape mismatch:');
-        print('   Expected: [1, $_predictionHorizon]');
-        print('   Got: $outputShape');
-      }
-
-      print('✅ AI Model loaded successfully');
-      print('   Input shape: $inputShape (dtype: ${inputTensors[0].type})');
-      print('   Output shape: $outputShape (dtype: ${outputTensors[0].type})');
-
       _isInitialized = true;
       return true;
-    } catch (e, stackTrace) {
-      print('❌ Error loading AI model: $e');
-      print('Stack trace: $stackTrace');
-
-      // Check for compatibility errors
-      final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('fully_connected') ||
-          errorStr.contains('opcode') ||
-          errorStr.contains('version') ||
-          errorStr.contains('unable to create interpreter')) {
-        print('');
-        print('⚠️ TFLITE COMPATIBILITY ISSUE DETECTED');
-        print('The model was created with a newer TensorFlow version.');
-        print('');
-        print('🔧 SOLUTION:');
-        print(
-          '1. Recreate the model in Colab using mobile-compatible settings',
-        );
-        print('2. See FIX_TFLITE_COMPATIBILITY.md for detailed instructions');
-        print(
-          '3. Replace assets/models/expense_predictor.tflite with the new model',
-        );
-        print('4. Hot restart the app (not just hot reload)');
-        print('');
-        print('Quick Colab fix:');
-        print('  converter = tf.lite.TFLiteConverter.from_keras_model(model)');
-        print(
-          '  converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS]',
-        );
-        print('  tflite_model = converter.convert()');
-      } else {
-        print('💡 Make sure the model file exists at $_modelPath');
-        print('💡 Run the Python training script to generate the model');
-      }
+    } catch (_) {
       _interpreter = null;
       _isInitialized = false;
       return false;
@@ -144,9 +81,7 @@ class AIExpenseService {
     try {
       final metadataString = await rootBundle.loadString(_metadataPath);
       _modelMetadata = json.decode(metadataString);
-      print('✅ Model metadata loaded');
-    } catch (e) {
-      print('⚠️ Could not load metadata: $e');
+    } catch (_) {
       // Use default metadata
       _modelMetadata = {
         'sequence_length': _sequenceLength,
@@ -188,73 +123,33 @@ class AIExpenseService {
         );
       }
 
-      if (expenses.isEmpty) {
-        print('⚠️ No expenses found for prediction');
-        return null;
-      }
+      if (expenses.isEmpty) return null;
 
-      // Filter only expenses (not income)
       final filteredExpenses = expenses
           .where((e) => e.type == TransactionType.expense)
           .toList();
+      if (filteredExpenses.isEmpty) return null;
 
-      if (filteredExpenses.isEmpty) {
-        print('⚠️ No expense transactions found');
-        return null;
-      }
-
-      // Sort by date
       filteredExpenses.sort((a, b) => a.date.compareTo(b.date));
 
-      print(
-        '📊 Using ${filteredExpenses.length} expense records for prediction',
-      );
-
-      // Prepare features
       final features = _prepareFeatures(filteredExpenses);
+      if (features == null) return null;
 
-      if (features == null) {
-        print(
-          '⚠️ Not enough data for prediction (need at least $_sequenceLength days)',
-        );
-        return null;
-      }
-
-      // Run inference
       final predictions = _runInference(features);
-
-      // Process predictions
-      final prediction = _processPredictions(predictions, filteredExpenses);
-
-      return prediction;
-    } catch (e, stackTrace) {
-      print('❌ Error predicting expenses: $e');
-      print('Stack trace: $stackTrace');
+      return _processPredictions(predictions, filteredExpenses);
+    } catch (_) {
       return null;
     }
   }
 
   /// Prepare features from expense data
   List<List<double>>? _prepareFeatures(List<Expense> expenses) {
-    if (expenses.isEmpty) {
-      print('⚠️ _prepareFeatures: expenses list is empty');
-      return null;
-    }
+    if (expenses.isEmpty) return null;
 
-    // Get date range
     final minDate = expenses.first.date;
     final maxDate = expenses.last.date;
     final daysDiff = maxDate.difference(minDate).inDays;
-
-    print(
-      '📅 Date range: ${minDate.toString().split(' ')[0]} to ${maxDate.toString().split(' ')[0]}',
-    );
-    print('📅 Days difference: $daysDiff (need at least $_sequenceLength)');
-
-    if (daysDiff < _sequenceLength) {
-      print('⚠️ Not enough days of data: $daysDiff < $_sequenceLength');
-      return null; // Not enough data
-    }
+    if (daysDiff < _sequenceLength) return null;
 
     // Get categories from metadata or expenses
     final categories =
@@ -299,11 +194,6 @@ class AIExpenseService {
       math.max(0, dateRange.length - _sequenceLength),
     );
 
-    print('📊 Preparing features for ${recentDates.length} days');
-    print(
-      '📊 Date range: ${recentDates.first.toString().split(' ')[0]} to ${recentDates.last.toString().split(' ')[0]}',
-    );
-
     final features = <List<double>>[];
 
     for (final date in recentDates) {
@@ -338,37 +228,24 @@ class AIExpenseService {
       features.add(featureVector);
     }
 
-    if (features.length != _sequenceLength) {
-      print(
-        '⚠️ Feature sequence length mismatch: ${features.length} != $_sequenceLength',
-      );
-      return null;
-    }
+    if (features.length != _sequenceLength) return null;
 
-    print(
-      '✅ Prepared ${features.length} feature vectors, each with ${features[0].length} features',
-    );
-
-    // Normalize features
     final mean = _modelMetadata?['feature_stats']?['mean'] ?? 0.0;
     final std = _modelMetadata?['feature_stats']?['std'] ?? 1.0;
-
-    print('📊 Normalizing features: mean=$mean, std=$std');
-
     for (int i = 0; i < features.length; i++) {
       for (int j = 0; j < features[i].length; j++) {
         features[i][j] = (features[i][j] - mean) / (std + 1e-8);
       }
     }
-
-    print('✅ Features normalized and ready for inference');
     return features;
   }
 
   /// Run inference on prepared features
   List<double> _runInference(List<List<double>> features) {
-    if (_interpreter == null) {
-      throw Exception('Model not initialized');
+    // Capture once so dispose() during inference can't null this out mid-flight.
+    final interpreter = _interpreter;
+    if (interpreter == null) {
+      throw StateError('Model not initialized');
     }
 
     if (features.length != _sequenceLength) {
@@ -407,7 +284,7 @@ class AIExpenseService {
       }
 
       // Get output tensor details
-      final outputTensors = _interpreter!.getOutputTensors();
+      final outputTensors = interpreter.getOutputTensors();
       final outputTensor = outputTensors[0];
       final outputShape = outputTensor.shape;
       final outputSize = outputShape.reduce((a, b) => a * b);
@@ -415,12 +292,7 @@ class AIExpenseService {
       // Prepare output buffer
       final output = List.filled(outputSize, 0.0);
 
-      print('🔮 Running inference...');
-      print('   Input shape: [1, $_sequenceLength, $_numFeatures]');
-      print('   Output shape: $outputShape');
-
-      // Run inference
-      _interpreter!.run(inputData, output);
+      interpreter.run(inputData, output);
 
       // Extract predictions
       // Output is flat list from TFLite, shape is [1, prediction_horizon]
@@ -436,14 +308,8 @@ class AIExpenseService {
         return value < 0 ? 0.0 : value; // Ensure non-negative
       }).toList();
 
-      print('✅ Inference completed');
-      print('   Predictions: ${transformedPredictions.length} values');
-      print('   Sample (first 5): ${transformedPredictions.take(5).toList()}');
-
       return transformedPredictions;
-    } catch (e, stackTrace) {
-      print('❌ Inference error: $e');
-      print('Stack trace: $stackTrace');
+    } catch (_) {
       rethrow;
     }
   }

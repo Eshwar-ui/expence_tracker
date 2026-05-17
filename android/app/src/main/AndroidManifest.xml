@@ -2,8 +2,8 @@
     package="com.eshwar.expensetracker">
 
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <application
         android:label="Expense Tracker"
         android:name="${applicationName}"
@@ -57,15 +57,16 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Notification Listener Service -->
         <service
             android:name=".NotificationCaptureService"
-            android:exported="false"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            android:label="Expense Tracker"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
 
         <meta-data
             android:name="flutterEmbedding"

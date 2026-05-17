@@ -21,6 +21,8 @@ class NotificationParsing {
     'credited',
     'credit',
     'received',
+    'deposited',
+    'cr',
     'refund',
     'cashback',
     'reversal',
@@ -36,34 +38,46 @@ class NotificationParsing {
     'purchase',
     'withdrawn',
     'withdrawal',
+    'dr',
+    'charged',
+    'deducted',
     'transfer',
     'sent',
   ];
 
   static final List<RegExp> _amountPatterns = [
-    RegExp(r'(?:rs\.?|inr|₹)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
-        caseSensitive: false),
-    RegExp(r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|₹)',
-        caseSensitive: false),
-    RegExp(r'\b(?:amount|amt)\s*(?:of|is|:)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
-        caseSensitive: false),
-    RegExp(r'\b(?:debited|credited|spent|paid|payment|purchase|withdrawn|received)\s*(?:for|of|by)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
-        caseSensitive: false),
+    RegExp(
+      r'(?:rs\.?:?|inr[:.]?|\u20b9)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20b9)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(?:amount|amt)\s*(?:of|is|:)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(?:debited|credited|spent|paid|payment|purchase|withdrawn|received|charged|deducted)\s*(?:for|of|by)?\s*(?:rs\.?:?|inr[:.]?|\u20b9)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(?:dr|cr)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      caseSensitive: false,
+    ),
   ];
 
   static final List<RegExp> _merchantPatterns = [
-    RegExp(r'\bto\s+([a-z0-9][a-z0-9 &._@/\-]{2,})',
-        caseSensitive: false),
-    RegExp(r'\bat\s+([a-z0-9][a-z0-9 &._@/\-]{2,})',
-        caseSensitive: false),
-    RegExp(r'\bfrom\s+([a-z0-9][a-z0-9 &._@/\-]{2,})',
-        caseSensitive: false),
+    RegExp(r'\bto\s+([a-z0-9][a-z0-9 &._@/\-]{2,})', caseSensitive: false),
+    RegExp(r'\bat\s+([a-z0-9][a-z0-9 &._@/\-]{2,})', caseSensitive: false),
+    RegExp(r'\bfrom\s+([a-z0-9][a-z0-9 &._@/\-]{2,})', caseSensitive: false),
     RegExp(r'\bmerchant[:\s]+([a-z0-9][a-z0-9 &._@/\-]{2,})',
         caseSensitive: false),
     RegExp(r'\bpayee[:\s]+([a-z0-9][a-z0-9 &._@/\-]{2,})',
         caseSensitive: false),
-    RegExp(r'\bupi[:/\- ]+([a-z0-9@._-]{3,})',
-        caseSensitive: false),
+    RegExp(r'\bupi[:/\- ]+([a-z0-9@._-]{3,})', caseSensitive: false),
+    RegExp(r'[-–]\s*([a-z][a-z &.]{2,})$', caseSensitive: false),
   ];
 
   static ParsingResult parse(String text, {String? title}) {
@@ -110,14 +124,16 @@ class NotificationParsing {
         final raw = match.group(1)?.replaceAll(',', '') ?? '';
         final amount = double.tryParse(raw);
         if (amount != null && amount > 0 && amount < 100000000) {
-          final hasCurrency =
-              RegExp(r'(rs\.?|inr|₹)', caseSensitive: false)
-                  .hasMatch(match.group(0) ?? '');
+          final hasCurrency = RegExp(
+            r'(rs\.?|inr|\u20b9)',
+            caseSensitive: false,
+          ).hasMatch(match.group(0) ?? '');
           final hasKeyword = RegExp(
-                  r'(debited|credited|spent|paid|payment|purchase|withdrawn|received|amount|amt)',
+                  r'(debited|credited|spent|paid|payment|purchase|withdrawn|received|charged|deducted|dr|cr|amount|amt)',
                   caseSensitive: false)
               .hasMatch(match.group(0) ?? '');
-          return _AmountResult(amount: amount, hasContext: hasCurrency || hasKeyword);
+          return _AmountResult(
+              amount: amount, hasContext: hasCurrency || hasKeyword);
         }
       }
     }
@@ -133,10 +149,12 @@ class NotificationParsing {
     if (hasCredit && !hasDebit) return 'credit';
     if (hasDebit && !hasCredit) return 'debit';
 
-    if (lower.contains('credited')) return 'credit';
-    if (lower.contains('debited')) return 'debit';
+    if (lower.contains('credited') || lower.contains(' cr ')) return 'credit';
+    if (lower.contains('debited') || lower.contains(' dr ')) return 'debit';
     if (lower.contains('refund') || lower.contains('cashback')) return 'credit';
-    if (lower.contains('spent') || lower.contains('paid') || lower.contains('purchase')) {
+    if (lower.contains('spent') ||
+        lower.contains('paid') ||
+        lower.contains('purchase')) {
       return 'debit';
     }
 
@@ -153,8 +171,7 @@ class NotificationParsing {
     }
 
     if (preferredType == 'credit') {
-      final fromMatch = RegExp(
-              r'\bfrom\s+([a-z0-9][a-z0-9 &._@/\-]{2,})',
+      final fromMatch = RegExp(r'\bfrom\s+([a-z0-9][a-z0-9 &._@/\-]{2,})',
               caseSensitive: false)
           .firstMatch(text);
       if (fromMatch != null) {
@@ -169,8 +186,13 @@ class NotificationParsing {
     var cleaned = raw;
 
     cleaned = cleaned.split(RegExp(r'[;,.]')).first;
-    cleaned = cleaned.replaceAll(RegExp(r'\s+(ref|rrn|utr|txn|txnid|id|bal|available|avl|a/c|ac|account)\b.*$', caseSensitive: false), '');
-    cleaned = cleaned.replaceAll(RegExp(r'^(upi|imps|neft|rtgs|pos)\s*', caseSensitive: false), '');
+    cleaned = cleaned.replaceAll(
+        RegExp(
+            r'\s+(ref|rrn|utr|txn|txnid|id|bal|available|avl|a/c|ac|account)\b.*$',
+            caseSensitive: false),
+        '');
+    cleaned = cleaned.replaceAll(
+        RegExp(r'^(upi|imps|neft|rtgs|pos)\s*', caseSensitive: false), '');
     cleaned = cleaned.replaceAll(RegExp(r'\s+'), ' ').trim();
 
     if (cleaned.length < 3) return null;
@@ -307,4 +329,3 @@ Validation examples:
             timestamp: 1700000000000, source: "", duplicateFound: true)
    => reasons: ["invalid_source", "duplicate"]
 */
-

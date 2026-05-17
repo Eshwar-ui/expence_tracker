@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/services/firestore_service.dart';
 import 'package:expence_tracker/services/upi_india_service.dart';
@@ -8,7 +10,7 @@ import 'package:flutter_upi_india/flutter_upi_india.dart';
 import '../widgets/design_system_components.dart';
 
 class ScanUPIScreen extends StatefulWidget {
-  const ScanUPIScreen({Key? key}) : super(key: key);
+  const ScanUPIScreen({super.key});
 
   @override
   State<ScanUPIScreen> createState() => _ScanUPIScreenState();
@@ -70,7 +72,7 @@ class _ScanUPIScreenState extends State<ScanUPIScreen> {
           isProcessing = false;
           _hasDetected = false;
         });
-        controller.start();
+        unawaited(controller.start());
         return;
       }
 
@@ -161,8 +163,7 @@ class _ScanUPIScreenState extends State<ScanUPIScreen> {
 class UPIPaymentConfirmationScreen extends StatefulWidget {
   final String upiUri;
 
-  const UPIPaymentConfirmationScreen({Key? key, required this.upiUri})
-      : super(key: key);
+  const UPIPaymentConfirmationScreen({super.key, required this.upiUri});
 
   @override
   State<UPIPaymentConfirmationScreen> createState() =>
@@ -292,15 +293,15 @@ class _UPIPaymentConfirmationScreenState
         if (!mounted) return;
 
         // Show success dialog with option to save
-        showDialog(
+        unawaited(showDialog(
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            title: Row(
+            title: const Row(
               children: [
                 Icon(Icons.check_circle, color: Colors.green, size: 28),
-                const SizedBox(width: 12),
-                const Text('Payment Successful'),
+                SizedBox(width: 12),
+                Text('Payment Successful'),
               ],
             ),
             content: Column(
@@ -338,7 +339,7 @@ class _UPIPaymentConfirmationScreenState
               ),
             ],
           ),
-        );
+        ));
       } else {
         // Payment failed or submitted - handlePaymentResponse will show appropriate message
         UpiIndiaService.handlePaymentResponse(response, context);
@@ -396,7 +397,7 @@ class _UPIPaymentConfirmationScreenState
                             decoration: BoxDecoration(
                               color: Theme.of(
                                 context,
-                              ).colorScheme.primary.withOpacity(0.1),
+                              ).colorScheme.primary.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
@@ -416,7 +417,7 @@ class _UPIPaymentConfirmationScreenState
                                     fontSize: 12,
                                     color: Theme.of(
                                       context,
-                                    ).colorScheme.onSurface.withOpacity(0.6),
+                                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -438,7 +439,7 @@ class _UPIPaymentConfirmationScreenState
                                       fontSize: 12,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withOpacity(0.6),
+                                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],
@@ -570,7 +571,7 @@ class _UPIPaymentConfirmationScreenState
                     fontSize: 12,
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withOpacity(0.6),
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ),
