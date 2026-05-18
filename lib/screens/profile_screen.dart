@@ -8,6 +8,7 @@ import 'package:expence_tracker/utils/app_constants.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/services/security_service.dart';
 import 'package:expence_tracker/services/reminder_service.dart';
+import 'package:expence_tracker/screens/export_sheet.dart';
 import 'package:expence_tracker/models/app_user.dart';
 import 'package:intl/intl.dart';
 
@@ -384,6 +385,13 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Categories',
             subtitle: 'Customise your labels',
             onTap: () => Navigator.pushNamed(context, '/categories'),
+          ),
+          _divider(),
+          _buildActionTile(
+            icon: Icons.file_download_outlined,
+            title: 'Export Data',
+            subtitle: 'Download CSV or PDF report',
+            onTap: () => ExportSheet.show(context),
           ),
         ],
       ),

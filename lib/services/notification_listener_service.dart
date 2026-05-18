@@ -7,6 +7,7 @@ import '../models/notification_payload.dart';
 import '../models/pending_transaction.dart';
 import '../utils/notification_parsing.dart';
 import '../utils/transaction_parser.dart';
+import 'pending_notification_service.dart';
 import 'pending_transaction_service.dart';
 
 class NotificationListenerService {
@@ -189,6 +190,14 @@ class NotificationListenerService {
     );
 
     await _pendingTransactionService.addPendingTransaction(pendingTransaction);
+
+    // Surface a heads-up notification with Confirm/Review actions so the
+    // user can save the detection in one tap without opening the app.
+    try {
+      await PendingNotificationService.instance.showPending(pendingTransaction);
+    } catch (e) {
+      debugPrint('$_logTag: showPending failed (non-fatal): $e');
+    }
   }
 
   bool _wasRecentlyProcessed(String key) {

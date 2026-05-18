@@ -10,7 +10,11 @@ import 'package:expence_tracker/screens/ai_predictions_screen.dart';
 import 'package:expence_tracker/screens/categories_screen.dart';
 import 'package:expence_tracker/screens/smart_inbox_screen.dart';
 import 'package:expence_tracker/firebase_options.dart';
+import 'package:expence_tracker/models/expence.dart';
+import 'package:expence_tracker/services/pending_notification_service.dart';
+import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
@@ -25,36 +29,74 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Load environment variables
-    await dotenv.load(fileName: ".env");
+    try {
+      await dotenv.load(fileName: ".env");
+    } catch (e, s) {
+      debugPrint('dotenv.load failed (non-fatal): $e\n$s');
+    }
 
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    // Firebase init is the most common cold-start failure point on Android
+    // (Google Play Services not ready yet). Retry once before giving up so
+    // the app doesn't die on the first launcher tap.
+    var firebaseReady = false;
+    for (var attempt = 0; attempt < 2 && !firebaseReady; attempt++) {
+      try {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+        firebaseReady = true;
+      } catch (e, s) {
+        debugPrint('Firebase init attempt ${attempt + 1} failed: $e\n$s');
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 400));
+        }
+      }
+    }
 
-    await FirebaseCrashlytics.instance
-        .setCrashlyticsCollectionEnabled(!kDebugMode);
+    if (firebaseReady) {
+      try {
+        await FirebaseCrashlytics.instance
+            .setCrashlyticsCollectionEnabled(!kDebugMode);
+      } catch (e) {
+        debugPrint('Crashlytics enable failed (non-fatal): $e');
+      }
 
-    FlutterError.onError = (FlutterErrorDetails details) {
-      FlutterError.presentError(details);
-      FirebaseCrashlytics.instance.recordFlutterFatalError(details);
-    };
+      FlutterError.onError = (FlutterErrorDetails details) {
+        FlutterError.presentError(details);
+        FirebaseCrashlytics.instance.recordFlutterFatalError(details);
+      };
 
-    PlatformDispatcher.instance.onError = (error, stack) {
-      FirebaseCrashlytics.instance.recordError(
-        error,
-        stack,
-        fatal: true,
-      );
-      return true;
-    };
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(
+          error,
+          stack,
+          fatal: true,
+        );
+        return true;
+      };
+    }
+
+    // Local notifications for one-tap confirm of detected transactions.
+    // Must run before runApp so a launch-tap response can be replayed once
+    // the navigator is up.
+    try {
+      await PendingNotificationService.instance.initialize();
+    } catch (e) {
+      debugPrint('PendingNotificationService init failed (non-fatal): $e');
+    }
 
     runApp(const MyApp());
   }, (error, stack) {
-    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    try {
+      FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    } catch (_) {
+      // Crashlytics not ready — swallow so we don't recurse into the zone.
+    }
     debugPrint('Uncaught error: $error');
   });
 }
+
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -64,6 +106,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  StreamSubscription<PendingNotificationAction>? _pendingActionSub;
+
   @override
   void initState() {
     super.initState();
@@ -72,12 +116,56 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAppIconTheme();
     });
+    _pendingActionSub =
+        PendingNotificationService.instance.actions.listen(_onPendingAction);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_pendingActionSub?.cancel());
     super.dispose();
+  }
+
+  Future<void> _onPendingAction(PendingNotificationAction action) async {
+    final navState = rootNavigatorKey.currentState;
+    if (navState == null) return;
+    final ctx = navState.context;
+
+    switch (action.actionId) {
+      case PendingNotificationAction.confirm:
+        try {
+          final Expense? saved =
+              await PendingTransactionService().confirmPending(action.pendingId);
+          if (!ctx.mounted) return;
+          if (saved == null) {
+            showDesignSystemSnackBar(
+              context: ctx,
+              message: 'Already handled — nothing to confirm.',
+              isError: true,
+            );
+            return;
+          }
+          showDesignSystemSnackBar(
+            context: ctx,
+            message:
+                '✓ Saved ${saved.type == TransactionType.income ? 'income' : 'expense'}: ₹${saved.amount.toStringAsFixed(saved.amount == saved.amount.truncateToDouble() ? 0 : 2)}',
+          );
+        } catch (e) {
+          debugPrint('Notification confirm failed: $e');
+          if (!ctx.mounted) return;
+          showDesignSystemSnackBar(
+            context: ctx,
+            message: "Couldn't save that transaction. Open the app to review.",
+            isError: true,
+          );
+        }
+        break;
+      case PendingNotificationAction.review:
+      case PendingNotificationAction.body:
+        unawaited(navState.pushNamed('/scan'));
+        break;
+    }
   }
 
   @override
@@ -99,6 +187,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Expense Tracker',
       theme: AppDesignSystem.lightTheme,

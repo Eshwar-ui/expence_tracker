@@ -39,19 +39,26 @@ To empower users with intelligent financial tracking tools that provide insights
 ### 3.1 Core Features
 
 #### 3.1.1 Transaction Management
-- **Add Transactions**: Manual entry of income and expense transactions
-- **Edit Transactions**: Modify existing transaction details
-- **Delete Transactions**: Remove transactions with confirmation
-- **Transaction Types**: Support for both income and expense transactions
-- **Categories**: Predefined categories for expenses and income
-- **Transaction Details**: Title, amount, date, category, description, payment method, location, tags
+- **Redesigned Add/Edit Modal**: Hero amount card with accent gradient, gradient-driven Expense/Income toggle, premium category pills, in-modal numeric keypad. Keypad automatically shrinks when the soft keyboard appears so the note field stays accessible.
+- **Manual Entry**: Tap the center **+** in the bottom nav pill to open the modal.
+- **Voice Quick-Add**: Tap the **mic** half of the center pill to dictate a transaction. The speech recognizer captures phrases like *"250 for coffee"* or *"5k salary"*, parses them into amount + type + category + title, and pre-fills the modal for review-then-save.
+- **Edit / Delete**: Tap any transaction to edit; long-swipe / detail-sheet action to delete with confirmation.
+- **Transaction Types**: Expense and income with type-specific accent colors throughout.
+- **Categories**: Predefined + user-defined, with icon-in-circle pills in the modal.
+- **Transaction Details**: Title, amount, date, category, description, payment method, location, tags.
+- **Recurring Quick-Fill Chips**: One-tap pre-fill from saved recurring transactions inside the modal.
 
-#### 3.1.2 SMS Transaction Scanning
-- **Bank Integration**: Support for 30+ major Indian banks (HDFC, ICICI, SBI, Axis, Kotak, etc.)
-- **Automatic Detection**: Parse bank SMS messages for transaction details
-- **Smart Categorization**: Auto-categorize transactions based on description patterns
-- **Transaction Preview**: Review detected transactions before adding to expense list
-- **Permission Management**: Handle SMS read permissions securely
+#### 3.1.2 SMS & Notification-Based Transaction Detection
+- **Bank Integration**: Support for 30+ major Indian banks (HDFC, ICICI, SBI, Axis, Kotak, etc.).
+- **Notification Listener**: Reads UPI app notifications (Google Pay, PhonePe, Paytm, BHIM, SBI Pay) on Android and converts them into pending transactions awaiting user approval.
+- **Automatic Detection**: Parses bank SMS + UPI notifications for amount, merchant, and direction (debit/credit).
+- **Smart Categorization**: Heuristic merchant → category mapping (Swiggy → Food, Uber → Transport, Amazon → Shopping, …).
+- **Quick-Add from Notification (Android)**: When a transaction is detected, a heads-up notification appears with two action buttons:
+  - **Confirm** — saves the detection as a real expense in one tap, without opening the app to the modal.
+  - **Review** — opens the Smart Inbox / Pending Transactions screen for edits.
+  Notification taps from a killed app are replayed via `getNotificationAppLaunchDetails()` so Confirm still works after a cold start.
+- **Pending Transactions Screen**: Centralized review queue for all detected transactions with bulk approve / reject.
+- **Permission Management**: Securely handles SMS, notification access, microphone, and `POST_NOTIFICATIONS` permissions.
 
 #### 3.1.3 Authentication & User Management
 - **Email/Password Authentication**: Traditional sign-up and sign-in
@@ -74,6 +81,7 @@ To empower users with intelligent financial tracking tools that provide insights
 - **Income Summary**: Total income with trend indicators
 - **Expense Summary**: Total expenses with trend indicators
 - **Quick Actions**: Direct access to add transactions and scan SMS
+- **Streak Badge**: A flame chip next to the user's first name shows the **current logging streak** (consecutive days a transaction was added). Tints amber when the current streak matches the personal best, red otherwise. Milestone toasts fire at 3 / 7 / 14 / 30 / 60 / 100 / 365 days: *"🔥 7-day streak! Keep it going."* Streak persists locally for instant first-paint and syncs to Firestore for cross-device continuity.
 
 #### 3.2.2 Category Analytics
 - **Category Breakdown**: Visual representation of spending by category
@@ -93,6 +101,22 @@ To empower users with intelligent financial tracking tools that provide insights
 - **Monthly Reports**: Comprehensive monthly financial summaries
 - **Trend Analysis**: Historical spending trend identification
 
+#### 3.2.5 Search & Advanced Filtering (Transactions Screen)
+- **Full-Text Search**: Searches title, category, and description simultaneously.
+- **Type Filter**: All / Income / Expense segmented control.
+- **Date Range Filter**: Chip-based presets — All Time / This Month / Last 30 Days / Last 90 Days / Custom (native date-range picker with brand theming).
+- **Amount Range Filter**: Independent `Min` and `Max` ₹-prefixed inputs, applied live as you type.
+- **Category Filter**: Dropdown of all defined categories.
+- **Active Filter Badge**: Filter button shows a count badge for the number of active filter dimensions.
+- **One-Tap Reset**: Clears all filters and search query at once.
+
+#### 3.2.6 Data Export
+- **CSV Export**: 9-column spreadsheet (Date, Type, Category, Title, Amount, Description, Payment Method, Tags, Location) with proper RFC 4180 quote escaping.
+- **PDF Export**: A4 report with branded header, 4-tile summary (Income / Expense / Net / Transaction count), and a styled transaction table. Uses Noto Sans (full Unicode coverage) so ₹, emoji, and regional scripts render correctly.
+- **Period Picker**: This Month / Last Month / This Year / All Time / Custom date range.
+- **System Share Sheet**: One-tap share to email, WhatsApp, Drive, etc.
+- **Entry Point**: Profile → Financial Hub → **Export Data**.
+
 ### 3.3 User Experience Features
 
 #### 3.3.1 Modern UI/UX
@@ -103,11 +127,11 @@ To empower users with intelligent financial tracking tools that provide insights
 - **Abstract Shapes**: Custom decorative elements for visual appeal
 
 #### 3.3.2 Navigation & Accessibility
-- **Bottom Navigation**: Easy access to main features (Home, Transactions, Reports, Profile)
-- **Floating Action Button**: Quick access to add new transactions
-- **Pull-to-Refresh**: Refresh data with intuitive gesture
-- **Empty States**: Helpful guidance when no data is available
-- **Loading States**: Clear feedback during data operations
+- **Bottom Navigation**: Easy access to main features (Home, Transactions, Reports, Profile).
+- **Center Split Pill (Primary CTA)**: Gradient pill in the bottom nav split into two independently tappable halves — left **+** opens the manual-add modal, right **mic** starts voice quick-add. A soft fading hairline divider separates the two zones; each half has its own press-scale animation and tooltip.
+- **Pull-to-Refresh**: Refresh data with intuitive gesture.
+- **Empty States**: Helpful guidance when no data is available, including a one-tap **Clear Filters** action when the empty state is due to filters.
+- **Loading States**: Clear feedback during data operations.
 
 #### 3.3.3 Form Validation & Input
 - **Comprehensive Validation**: Real-time validation for all input fields
@@ -120,13 +144,21 @@ To empower users with intelligent financial tracking tools that provide insights
 ## 4. Technical Specifications
 
 ### 4.1 Technology Stack
-- **Framework**: Flutter 3.9.2+
+- **Framework**: Flutter (Dart SDK ^3.5.0)
 - **Language**: Dart
-- **Backend**: Firebase (Authentication, Firestore, Analytics)
-- **State Management**: Provider pattern
-- **Charts**: FL Chart library
-- **SMS Processing**: Another Telephony package
-- **Permissions**: Permission Handler
+- **Backend**: Firebase (Authentication, Firestore, Cloud Messaging, Crashlytics)
+- **State Management**: `StatefulWidget` + service singletons (no Provider/Riverpod/Bloc)
+- **Charts**: `fl_chart`
+- **Typography**: `google_fonts` (Outfit + Plus Jakarta Sans)
+- **SMS Processing**: `another_telephony`
+- **Notifications**: `flutter_local_notifications` (channels, heads-up alerts, action buttons), Firebase Messaging (server-pushed daily reminders)
+- **Voice Quick-Add**: `speech_to_text` (system speech recognizer; on-device when available)
+- **Export**: `pdf` + `printing` (loads Noto Sans for full Unicode), `share_plus`, `path_provider`
+- **AI**: Google Gemini (`gemini_ai_service.dart`) + TensorFlow Lite predictions (`ai_expense_service.dart`)
+- **Security**: `local_auth` (biometrics), `flutter_secure_storage`
+- **Permissions**: `permission_handler`
+- **Home Widget**: `home_widget` (Android home-screen balance widget)
+- **Networking**: `http`, `flutter_dotenv` for environment variables
 
 ### 4.2 Platform Support
 - **Android**: Primary platform with full feature support
@@ -238,22 +270,42 @@ To empower users with intelligent financial tracking tools that provide insights
 - ✅ Basic analytics and reporting
 - ✅ Modern UI with Material Design 3
 
-### 7.2 Phase 2: Enhanced Analytics (Current)
+### 7.2 Phase 2: Enhanced Analytics (Completed)
 - ✅ Advanced analytics dashboard
 - ✅ Budget tracking and management
 - ✅ Category-wise spending analysis
 - ✅ Monthly and yearly filtering
 - ✅ Financial overview with balance tracking
 
-### 7.3 Phase 3: Advanced Features (Future)
-- 🔄 Dark mode support
-- 🔄 Data export (CSV/PDF)
-- 🔄 Receipt photo attachment
+### 7.3 Phase 3: Power User & Automation (Completed)
+- ✅ **Redesigned transaction modal** with hero amount card and shrinking keypad
+- ✅ **Streak + gamification** with milestone toasts and home-screen badge
+- ✅ **CSV / PDF export** with system share-sheet and Unicode-safe PDF rendering
+- ✅ **Search & advanced filter**: full-text + date range chips + amount range + category
+- ✅ **Voice quick-add** via the bottom-nav mic button (`speech_to_text` + deterministic parser)
+- ✅ **Quick-add from notification**: heads-up alert with Confirm / Review actions
+- ✅ **Recurring transactions** with one-tap quick-fill chips
+- ✅ **Dark mode** (system-driven via `ThemeMode.system`)
+- ✅ **Push notifications** for daily logging reminders (FCM + Cloud Function)
+- ✅ **Biometric app lock** and PIN protection
+- ✅ **Android home-screen widget** showing current balance
+- ✅ **AI predictions** for future expenses (TFLite) and Gemini-powered insights
+
+### 7.4 Phase 4: Future Considerations
+- 🔄 Accounts / Wallets (transactions tied to a source: cash, HDFC card, UPI, etc.)
+- 🔄 Transfers between accounts (excluded from income/expense reports)
+- 🔄 Split transactions (one purchase → multiple categories)
+- 🔄 Savings goals with progress tracking
+- 🔄 Subscription detector (auto-flag recurring monthly merchants)
+- 🔄 Bill calendar with due-date badges
+- 🔄 Cash flow forecast (project end-of-month balance from current pace)
+- 🔄 Receipt OCR via Gemini Vision
+- 🔄 Net worth tracking (assets + liabilities)
+- 🔄 Year-in-review / Spotify-Wrapped style annual summary
+- 🔄 Group / shared expenses (Splitwise-lite)
 - 🔄 Multiple currency support
-- 🔄 Recurring expense tracking
-- 🔄 Push notifications for budget alerts
-- 🔄 Advanced charts and graphs
-- 🔄 Family/shared expense tracking
+- 🔄 True background notification confirmation (Firebase-init'd background isolate)
+- 🔄 Tags as a first-class filter dimension
 
 ### 7.4 Phase 4: Enterprise Features (Future)
 - 🔄 Business expense tracking
@@ -320,6 +372,21 @@ The technical architecture is robust and scalable, built on proven technologies 
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 2024  
-**Next Review**: January 2025
+**Document Version**: 1.1  
+**Last Updated**: May 2026  
+**Next Review**: Q3 2026
+
+### Changelog
+
+**v1.1 — May 2026**
+- Added: redesigned add/edit modal with hero amount card and keyboard-aware keypad
+- Added: streak tracking + milestone toasts + home-screen flame badge
+- Added: CSV / PDF export with Unicode-safe rendering and system share sheet
+- Added: search + advanced filtering (date range chips, amount range, full-text)
+- Added: voice quick-add via bottom-nav mic button (`speech_to_text` parser)
+- Added: heads-up notification with Confirm / Review action buttons for detected transactions
+- Updated: tech stack section to reflect new dependencies (`pdf`, `printing`, `share_plus`, `path_provider`, `speech_to_text`)
+- Updated: bottom navigation now uses a split gradient pill (+/mic) instead of a single circle
+
+**v1.0 — December 2024**
+- Initial PRD covering core tracking, SMS scanning, analytics, and budget features.

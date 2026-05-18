@@ -21,7 +21,10 @@ class FirestoreService {
   Future<void> addExpense(Expense expense) async {
     _assertValid(expense);
     try {
-      await _expensesCollection.doc(expense.id).set(expense.toJson());
+      await _expensesCollection.doc(expense.id).set({
+        ...expense.toJson(),
+        'userId': _userId,
+      });
     } catch (e) {
       throw Exception('Failed to add expense: $e');
     }
@@ -66,7 +69,10 @@ class FirestoreService {
   Future<void> updateExpense(Expense expense) async {
     _assertValid(expense);
     try {
-      await _expensesCollection.doc(expense.id).update(expense.toJson());
+      await _expensesCollection.doc(expense.id).update({
+        ...expense.toJson(),
+        'userId': _userId,
+      });
     } catch (e) {
       throw Exception('Failed to update expense: $e');
     }

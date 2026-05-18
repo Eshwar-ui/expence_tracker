@@ -9,6 +9,7 @@ import 'package:expence_tracker/services/analytics_service.dart';
 import 'package:expence_tracker/services/home_balance_widget_service.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/services/recurring_transaction_service.dart';
+import 'package:expence_tracker/services/reminder_service.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -35,6 +36,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   User? _user;
   bool _isLoading = true;
   String? _loadError;
+  StreakResult _streak = const StreakResult.empty();
   late final AnimationController _animationController;
 
   String get _firstName {
@@ -103,9 +105,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       await HomeBalanceWidgetService.updateFromAnalytics(data);
 
+      final streak = await ReminderService().getStreak();
+
       if (!mounted) return;
       setState(() {
         _analyticsData = data;
+        _streak = streak;
         _isLoading = false;
         _loadError = null;
       });
@@ -206,12 +211,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_greeting, style: theme.textTheme.bodyMedium),
-                Text(
-                  _firstName,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: -0.5,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _firstName,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    if (_streak.currentStreak >= 1) ...[
+                      const HSpace.sm(),
+                      _StreakBadge(streak: _streak),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -852,4 +866,50 @@ String _monthLabel(DateTime date) {
   ];
 
   return '${months[date.month - 1]} ${date.year}';
+}
+
+class _StreakBadge extends StatelessWidget {
+  final StreakResult streak;
+  const _StreakBadge({required this.streak});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isPersonalBest = streak.currentStreak > 0 &&
+        streak.currentStreak == streak.longestStreak &&
+        streak.currentStreak >= 3;
+
+    final tint = isPersonalBest
+        ? AppDesignSystem.warning
+        : AppDesignSystem.error;
+
+    return Tooltip(
+      message: isPersonalBest
+          ? 'Personal best — keep it going!'
+          : 'Longest: ${streak.longestStreak} days',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: tint.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
+          border: Border.all(color: tint.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('🔥', style: TextStyle(fontSize: 13)),
+            const SizedBox(width: 4),
+            Text(
+              '${streak.currentStreak}',
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: tint,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

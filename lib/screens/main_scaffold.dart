@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/screens/expense_dialog.dart';
 import 'package:expence_tracker/screens/home.dart';
 import 'package:expence_tracker/screens/transactions_screen.dart';
 import 'package:expence_tracker/screens/reports_screen.dart';
 import 'package:expence_tracker/screens/profile_screen.dart';
+import 'package:expence_tracker/screens/voice_capture_sheet.dart';
+import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 
@@ -107,13 +110,14 @@ class _MainScaffoldState extends State<MainScaffold>
     );
   }
 
-  void _openAddExpense() {
+  void _openAddExpense({Expense? prefill}) {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => ExpenseDialog(
+        prefill: prefill,
         onTransactionSaved: () {
           // Refresh home if on home tab
           if (_currentIndex == 0) {
@@ -121,6 +125,18 @@ class _MainScaffoldState extends State<MainScaffold>
           }
         },
       ),
+    );
+  }
+
+  Future<void> _openVoiceQuickAdd() async {
+    await HapticFeedback.heavyImpact();
+    if (!mounted) return;
+    final parsed = await VoiceCaptureSheet.show(context);
+    if (!mounted || parsed == null) return;
+    _openAddExpense(prefill: parsed);
+    showDesignSystemSnackBar(
+      context: context,
+      message: 'Heard you — review and save.',
     );
   }
 
@@ -167,10 +183,13 @@ class _MainScaffoldState extends State<MainScaffold>
                   onTap: () => _onTap(1),
                 ),
               ),
-              // Center "+" button
+              // Center split pill: tap "+" for manual add, tap mic for voice
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
-                child: _AddButton(onTap: _openAddExpense),
+                child: _AddVoicePill(
+                  onAddTap: _openAddExpense,
+                  onVoiceTap: _openVoiceQuickAdd,
+                ),
               ),
               Expanded(
                 child: _ModernNavItem(
@@ -203,25 +222,111 @@ class _MainScaffoldState extends State<MainScaffold>
   }
 }
 
-class _AddButton extends StatefulWidget {
-  final VoidCallback onTap;
+/// Center bottom-nav action: a gradient pill split into two equal hit areas.
+/// Tap the left "+" to open the manual add modal; tap the right mic to start
+/// voice quick-add. Each half scales independently on press for tactile feel.
+class _AddVoicePill extends StatelessWidget {
+  final VoidCallback onAddTap;
+  final VoidCallback onVoiceTap;
 
-  const _AddButton({required this.onTap});
+  const _AddVoicePill({
+    required this.onAddTap,
+    required this.onVoiceTap,
+  });
 
   @override
-  State<_AddButton> createState() => _AddButtonState();
+  Widget build(BuildContext context) {
+    return Container(
+      width: 104,
+      height: 52,
+      decoration: BoxDecoration(
+        gradient: AppDesignSystem.primaryGradient,
+        borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
+        boxShadow: [
+          BoxShadow(
+            color: AppDesignSystem.brandPrimary.withValues(alpha: 0.45),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _PillHalf(
+              icon: Icons.add_rounded,
+              iconSize: 26,
+              tooltip: 'Add transaction',
+              onTap: onAddTap,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(AppDesignSystem.rFull),
+                bottomLeft: Radius.circular(AppDesignSystem.rFull),
+              ),
+            ),
+          ),
+          // Hairline divider with soft fade on either end.
+          Container(
+            width: 1,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0.0),
+                  Colors.white.withValues(alpha: 0.35),
+                  Colors.white.withValues(alpha: 0.0),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: _PillHalf(
+              icon: Icons.mic_rounded,
+              iconSize: 22,
+              tooltip: 'Voice quick-add',
+              onTap: onVoiceTap,
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(AppDesignSystem.rFull),
+                bottomRight: Radius.circular(AppDesignSystem.rFull),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class _AddButtonState extends State<_AddButton>
+class _PillHalf extends StatefulWidget {
+  final IconData icon;
+  final double iconSize;
+  final String tooltip;
+  final VoidCallback onTap;
+  final BorderRadius borderRadius;
+
+  const _PillHalf({
+    required this.icon,
+    required this.iconSize,
+    required this.tooltip,
+    required this.onTap,
+    required this.borderRadius,
+  });
+
+  @override
+  State<_PillHalf> createState() => _PillHalfState();
+}
+
+class _PillHalfState extends State<_PillHalf>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
 
   @override
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-      duration: const Duration(milliseconds: 100),
+      duration: const Duration(milliseconds: 110),
       vsync: this,
       value: 1.0,
     );
@@ -238,30 +343,28 @@ class _AddButtonState extends State<_AddButton>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _ctrl.reverse(),
-      onTapUp: (_) {
-        _ctrl.forward();
-        widget.onTap();
-      },
-      onTapCancel: () => _ctrl.forward(),
-      child: ScaleTransition(
-        scale: _scale,
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: AppDesignSystem.primaryGradient,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: AppDesignSystem.brandPrimary.withValues(alpha: 0.45),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
+    return Tooltip(
+      message: widget.tooltip,
+      child: GestureDetector(
+        onTapDown: (_) => _ctrl.reverse(),
+        onTapUp: (_) {
+          _ctrl.forward();
+          widget.onTap();
+        },
+        onTapCancel: () => _ctrl.forward(),
+        behavior: HitTestBehavior.opaque,
+        child: ClipRRect(
+          borderRadius: widget.borderRadius,
+          child: ScaleTransition(
+            scale: _scale,
+            child: Center(
+              child: Icon(
+                widget.icon,
+                color: Colors.white,
+                size: widget.iconSize,
               ),
-            ],
+            ),
           ),
-          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
         ),
       ),
     );

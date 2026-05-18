@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/models/pending_transaction.dart';
+import 'package:expence_tracker/services/firestore_service.dart';
 
 class PendingTransactionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -82,6 +84,51 @@ class PendingTransactionService {
       // its last value and can show a non-fatal error. Subscribers that care
       // about errors specifically can still attach their own onError handler.
     });
+  }
+
+  /// Fetches a single pending transaction by id. Returns null if it's
+  /// already been confirmed/rejected (or the user signed out).
+  Future<PendingTransaction?> getPendingById(String id) async {
+    final user = _auth.currentUser;
+    if (user == null) return null;
+    try {
+      final doc = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('pending_transactions')
+          .doc(id)
+          .get();
+      if (!doc.exists) return null;
+      return PendingTransaction.fromMap(doc.data()!);
+    } catch (e) {
+      debugPrint('getPendingById failed: $e');
+      return null;
+    }
+  }
+
+  /// One-shot confirm flow used by the notification "Confirm" action:
+  /// converts the pending row to an [Expense], saves it, deletes the
+  /// pending doc, and returns the saved expense. Returns null if the
+  /// pending doc was already gone (idempotent — safe to retry).
+  Future<Expense?> confirmPending(String id) async {
+    final pending = await getPendingById(id);
+    if (pending == null) return null;
+
+    final expense = Expense(
+      id: pending.id,
+      title: pending.merchantName,
+      amount: pending.amount,
+      date: pending.detectedAt,
+      category: pending.suggestedCategory ??
+          (pending.isCredit ? 'Income' : 'Digital Payments'),
+      description:
+          'Auto-detected from ${pending.appName}\n${pending.rawNotificationText}',
+      type: pending.isCredit ? TransactionType.income : TransactionType.expense,
+    );
+
+    await FirestoreService().addExpense(expense);
+    await deletePendingTransaction(pending.id);
+    return expense;
   }
 
   // Delete a pending transaction (reject)

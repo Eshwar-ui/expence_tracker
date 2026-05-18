@@ -47,6 +47,18 @@ dependencies:
   flutter_dotenv: ^5.1.0
   home_widget: ^0.9.0
 
+  # Local notification channel for FCM daily expense reminder
+  flutter_local_notifications: ^17.2.3
+
+  # CSV / PDF export + sharing
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  share_plus: ^10.1.4
+  path_provider: ^2.1.5
+
+  # Voice quick-add (mic → text → parsed transaction)
+  speech_to_text: ^7.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

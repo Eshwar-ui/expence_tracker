@@ -29,35 +29,46 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     private fun setLightIcon() {
-        try {
-            val packageManager = packageManager
-            val mainName = ComponentName(packageName, "$packageName.MainActivity")
-            val lightName = ComponentName(packageName, "$packageName.MainActivityLight")
-            val darkName = ComponentName(packageName, "$packageName.MainActivityDark")
-
-            if (packageManager.getComponentEnabledSetting(lightName) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                // Enable Light alias as the single launcher entry; disable main and dark so only one icon shows.
-                packageManager.setComponentEnabledSetting(lightName, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
-                packageManager.setComponentEnabledSetting(mainName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
-                packageManager.setComponentEnabledSetting(darkName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        swapLauncherAlias(enable = ".MainActivityLight", disable = ".MainActivityDark")
     }
 
     private fun setDarkIcon() {
-        try {
-            val packageManager = packageManager
-            val mainName = ComponentName(packageName, "$packageName.MainActivity")
-            val lightName = ComponentName(packageName, "$packageName.MainActivityLight")
-            val darkName = ComponentName(packageName, "$packageName.MainActivityDark")
+        swapLauncherAlias(enable = ".MainActivityDark", disable = ".MainActivityLight")
+    }
 
-            if (packageManager.getComponentEnabledSetting(darkName) != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-                // Enable Dark alias as the single launcher entry; disable main and light so only one icon shows.
-                packageManager.setComponentEnabledSetting(darkName, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
-                packageManager.setComponentEnabledSetting(mainName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
-                packageManager.setComponentEnabledSetting(lightName, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+    // Swap which alias is the visible launcher icon. MainActivity itself is
+    // never touched — disabling it breaks `flutter run`'s `am start` and
+    // `pm` lookups of the package's launch activity.
+    private fun swapLauncherAlias(enable: String, disable: String) {
+        try {
+            val pm = packageManager
+            val mainName = ComponentName(packageName, "$packageName.MainActivity")
+            val enableName = ComponentName(packageName, "$packageName$enable")
+            val disableName = ComponentName(packageName, "$packageName$disable")
+
+            // Self-heal: older builds disabled MainActivity. Restore it so
+            // `am start -n .../.MainActivity` resolves again.
+            if (pm.getComponentEnabledSetting(mainName) ==
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                pm.setComponentEnabledSetting(
+                    mainName,
+                    PackageManager.COMPONENT_ENABLED_STATE_DEFAULT,
+                    PackageManager.DONT_KILL_APP,
+                )
+            }
+
+            if (pm.getComponentEnabledSetting(enableName) !=
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+                pm.setComponentEnabledSetting(
+                    enableName,
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
+                pm.setComponentEnabledSetting(
+                    disableName,
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                    PackageManager.DONT_KILL_APP,
+                )
             }
         } catch (e: Exception) {
             e.printStackTrace()

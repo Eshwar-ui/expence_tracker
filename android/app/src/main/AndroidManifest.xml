@@ -5,12 +5,25 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Voice quick-add: speech_to_text resolves Google's recognition service via this intent -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:label="Expense Tracker"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
-        <!-- Default Activity - REQUIRED for Flutter Tooling -->
+        <!-- Default Activity - REQUIRED for Flutter Tooling.
+             No LAUNCHER intent-filter: launcher entries are provided by the
+             activity-aliases below so the icon-switcher can toggle them
+             without ever disabling MainActivity itself (disabling MainActivity
+             breaks `flutter run`'s `am start -n .../.MainActivity`). -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,16 +37,12 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
 
-        <!-- Light Mode Alias -->
+        <!-- Light Mode Alias (default visible launcher entry). -->
         <activity-alias
             android:name=".MainActivityLight"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/light_app_icon"
             android:label="Expense Tracker"
