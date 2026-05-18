@@ -1,9 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/expence.dart';
 import '../models/expense_prediction.dart';
-import 'firestore_service.dart';
 
 /// Service for AI-powered expense insights using Google Gemini API (Free)
 ///
@@ -14,9 +14,9 @@ class GeminiAIService {
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent';
 
-  final FirestoreService _firestoreService = FirestoreService();
-
   bool get isConfigured => _apiKey.isNotEmpty;
+  String? _lastError;
+  String? get lastError => _lastError;
 
   /// Generate AI insights from expense data
   Future<List<SpendingInsight>> generateInsights(
@@ -78,19 +78,23 @@ Focus on:
       if (response.statusCode == 200) {
         final text = _extractTextFromGeminiResponse(response.body);
         if (text == null || text.isEmpty) {
+          _lastError = 'Empty response from Gemini.';
           return _getFallbackInsights(expenses);
         }
 
         final insightsJson = _extractInsightsJson(text);
         if (insightsJson == null) {
+          _lastError = 'Gemini response did not contain valid insights JSON.';
           return _getFallbackInsights(expenses);
         }
 
         final rawList = insightsJson['insights'];
         if (rawList is! List) {
+          _lastError = 'Gemini response missing "insights" array.';
           return _getFallbackInsights(expenses);
         }
 
+        _lastError = null;
         return rawList
             .whereType<Map>()
             .map((i) => SpendingInsight(
@@ -101,8 +105,13 @@ Focus on:
                 ))
             .toList();
       }
-    } catch (_) {
-      // Swallow and fall back; never crash the insights screen on AI errors.
+
+      _lastError =
+          'Gemini HTTP ${response.statusCode}: ${response.body.substring(0, response.body.length.clamp(0, 200))}';
+      debugPrint('GeminiAIService: $_lastError');
+    } catch (e, st) {
+      _lastError = 'Gemini request failed: $e';
+      debugPrint('GeminiAIService failed: $e\n$st');
     }
 
     return _getFallbackInsights(expenses);
@@ -299,49 +308,4 @@ Focus on:
     return insights;
   }
 
-  /// Predict future expenses (simplified version)
-  Future<ExpensePrediction?> predictFutureExpenses() async {
-    try {
-      final now = DateTime.now();
-      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
-
-      final expenses = await _firestoreService.getExpensesByDateRange(
-        thirtyDaysAgo,
-        now,
-      );
-
-      final expenseOnly =
-          expenses.where((e) => e.type == TransactionType.expense).toList();
-
-      if (expenseOnly.isEmpty) {
-        return null;
-      }
-
-      // Simple prediction: average of last 30 days
-      final totalExpense =
-          expenseOnly.fold<double>(0.0, (sum, e) => sum + e.amount);
-      final avgDaily = totalExpense / 30;
-
-      // Predict next 30 days
-      final dailyPredictions = List<double>.filled(30, avgDaily);
-
-      // Category predictions
-      final categoryTotals = <String, double>{};
-      for (final expense in expenseOnly) {
-        categoryTotals[expense.category] =
-            (categoryTotals[expense.category] ?? 0.0) + expense.amount;
-      }
-
-      return ExpensePrediction(
-        dailyPredictions: dailyPredictions,
-        categoryPredictions: categoryTotals,
-        totalPredictedSpending: avgDaily * 30,
-        anomalyScore: 0.0,
-        predictionDate: now,
-        predictionStartDate: now.add(const Duration(days: 1)),
-      );
-    } catch (_) {
-      return null;
-    }
-  }
 }

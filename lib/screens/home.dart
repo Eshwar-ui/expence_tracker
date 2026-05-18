@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:expence_tracker/models/analytics.dart';
 import 'package:expence_tracker/models/expence.dart';
@@ -40,10 +39,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   String get _firstName {
     final name = _user?.displayName?.trim();
-    if (name == null || name.isEmpty) {
-      return 'User';
-    }
+    if (name == null || name.isEmpty) return 'there';
     return name.split(' ').first;
+  }
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 5) return 'Night owl mode 🦉';
+    if (hour < 12) return 'Good morning ☀️';
+    if (hour < 17) return 'Good afternoon 👋';
+    if (hour < 21) return 'Good evening 🌆';
+    return 'Good night 🌙';
+  }
+
+  String _spendingMood(double budgetUtilization) {
+    if (budgetUtilization == 0) return '📊';
+    if (budgetUtilization < 50) return '😊';
+    if (budgetUtilization < 75) return '😐';
+    if (budgetUtilization < 90) return '😬';
+    return '🚨';
   }
 
   @override
@@ -108,49 +122,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Stack(
         children: [
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppDesignSystem.brandPrimary.withValues(alpha: 0.25),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 250,
-            left: -150,
-            child: Container(
-              width: 400,
-              height: 400,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppDesignSystem.brandSecondary.withValues(alpha: 0.2),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 100,
-            right: -50,
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppDesignSystem.brandAccent.withValues(alpha: 0.15),
-              ),
-            ),
-          ),
+          // Single soft top-down gradient — replaces three blurry circles
+          // that previously washed every glass card with brand tint.
           Positioned.fill(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-              child: Container(color: Colors.transparent),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppDesignSystem.brandPrimary
+                        .withValues(alpha: isDark ? 0.12 : 0.06),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.45],
+                ),
+              ),
             ),
           ),
           SafeArea(
@@ -169,16 +160,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildWalletCard(),
+                          if (_loadError != null) ...[
+                            const VSpace.md(),
+                            _buildStatusBanner(),
+                          ],
                           const VSpace.xl(),
-                          _buildStatusBanner(),
-                          if (_loadError != null) const VSpace.md(),
-                          _buildOverviewGrid(),
+                          const _SectionHeader('Overview'),
+                          const VSpace.md(),
+                          _buildOverviewRow(),
                           const VSpace.xl(),
+                          const _SectionHeader('Quick Actions'),
+                          const VSpace.md(),
                           _buildQuickActions(),
                           const VSpace.xl(),
+                          const _SectionHeader('Insights'),
+                          const VSpace.md(),
                           _buildInsightCard(),
                           const VSpace.xl(),
-                          _buildRecentTransactionsHeader(),
+                          const _SectionHeader('Recent Activity'),
                           const VSpace.md(),
                         ],
                       ),
@@ -206,8 +205,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Welcome back,', style: theme.textTheme.bodyMedium),
-                Text(_firstName, style: theme.textTheme.headlineMedium),
+                Text(_greeting, style: theme.textTheme.bodyMedium),
+                Text(
+                  _firstName,
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+                ),
               ],
             ),
             Container(
@@ -282,49 +287,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Cash Position',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const VSpace.xs(),
-                    Text(
                       _monthLabel(DateTime.now()),
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    const VSpace.xs(),
+                    Text(
+                      'Net Balance',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
-                const Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: AppDesignSystem.brandPrimary,
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Text(
+                    _spendingMood(budgetUtilization.toDouble()),
+                    style: const TextStyle(fontSize: 22),
+                  ),
                 ),
               ],
             ),
             const VSpace.sm(),
-            Text(
-              '$_rupee${balance.toStringAsFixed(2)}',
-              style: Theme.of(context).textTheme.displayMedium,
+            _AnimatedBalanceCounter(
+              balance: balance,
+              animationController: _animationController,
             ),
-            const VSpace.sm(),
+            const VSpace.xs(),
             Text(
               budgetUtilization == 0
-                  ? 'No monthly budget tracked yet'
-                  : '$budgetUtilization% of your budget is already used',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const VSpace.xl(),
-            Row(
-              children: [
-                _buildStatItem(
-                  'Income',
-                  data?.totalIncome ?? 0,
-                  AppDesignSystem.success,
-                ),
-                const HSpace(AppDesignSystem.s32),
-                _buildStatItem(
-                  'Spent',
-                  data?.totalExpenses ?? 0,
-                  AppDesignSystem.error,
-                ),
-              ],
+                  ? 'Set a budget to track your progress'
+                  : budgetUtilization >= 90
+                      ? '⚠️ $budgetUtilization% of budget used'
+                      : '$budgetUtilization% of budget used — keep it up!',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: budgetUtilization >= 90
+                    ? AppDesignSystem.error
+                    : null,
+              ),
             ),
             const VSpace.lg(),
             ClipRRect(
@@ -349,29 +353,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildStatItem(String label, double amount, Color color) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-            ),
-            const HSpace.sm(),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
-        Text(
-          '$_rupee${amount.toStringAsFixed(0)}',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18),
-        ),
-      ],
     );
   }
 
@@ -418,77 +399,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildOverviewGrid() {
+  Widget _buildOverviewRow() {
     final data = _analyticsData;
-    final trends = data?.trends ?? const <TransactionTrend>[];
-    final topCategory = _topCategoryEntry(data?.categoryBreakdown);
-    final todayNet = trends.isNotEmpty ? trends.last.balance : 0.0;
-    final budgetUsed = data?.budgetStatus.budgetUtilizationPercentage ?? 0.0;
+    final income = data?.totalIncome ?? 0;
+    final spent = data?.totalExpenses ?? 0;
 
     return StreamBuilder<int>(
       stream: _pendingTransactionService.getPendingTransactionCount(),
       builder: (context, snapshot) {
         final pendingCount = snapshot.data ?? 0;
-
-        return Column(
+        return Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _buildOverviewCard(
-                    title: 'Pending Review',
-                    value: pendingCount.toString(),
-                    helper: pendingCount == 0
-                        ? 'Inbox is clear'
-                        : 'Needs confirmation',
-                    icon: Icons.inbox_rounded,
-                    color: AppDesignSystem.brandPrimary,
-                  ),
-                ),
-                const HSpace.md(),
-                Expanded(
-                  child: _buildOverviewCard(
-                    title: 'Budget Used',
-                    value: '${budgetUsed.round()}%',
-                    helper: data == null || data.budgetStatus.totalBudget == 0
-                        ? 'No budget set'
-                        : '$_rupee${data.budgetStatus.remainingBudget.toStringAsFixed(0)} left',
-                    icon: Icons.pie_chart_rounded,
-                    color: AppDesignSystem.brandAccent,
-                  ),
-                ),
-              ],
+            Expanded(
+              child: _buildStatTile(
+                label: 'Income',
+                value: '$_rupee${income.toStringAsFixed(0)}',
+                icon: Icons.south_west_rounded,
+                color: AppDesignSystem.success,
+              ),
             ),
-            const VSpace.md(),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildOverviewCard(
-                    title: 'Today Net',
-                    value:
-                        '${todayNet >= 0 ? '+' : '-'}$_rupee${todayNet.abs().toStringAsFixed(0)}',
-                    helper: 'Net movement today',
-                    icon: todayNet >= 0
-                        ? Icons.trending_up_rounded
-                        : Icons.trending_down_rounded,
-                    color: todayNet >= 0
-                        ? AppDesignSystem.success
-                        : AppDesignSystem.error,
-                  ),
-                ),
-                const HSpace.md(),
-                Expanded(
-                  child: _buildOverviewCard(
-                    title: 'Top Category',
-                    value: topCategory?.key ?? 'None',
-                    helper: topCategory == null
-                        ? 'No expense activity yet'
-                        : '$_rupee${topCategory.value.toStringAsFixed(0)} this month',
-                    icon: Icons.local_offer_rounded,
-                    color: AppDesignSystem.brandInfo,
-                  ),
-                ),
-              ],
+            const HSpace.md(),
+            Expanded(
+              child: _buildStatTile(
+                label: 'Spent',
+                value: '$_rupee${spent.toStringAsFixed(0)}',
+                icon: Icons.north_east_rounded,
+                color: AppDesignSystem.error,
+              ),
+            ),
+            const HSpace.md(),
+            Expanded(
+              child: _buildStatTile(
+                label: 'Pending',
+                value: pendingCount.toString(),
+                icon: Icons.inbox_rounded,
+                color: AppDesignSystem.brandPrimary,
+              ),
             ),
           ],
         );
@@ -496,56 +442,39 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildOverviewCard({
-    required String title,
+  Widget _buildStatTile({
+    required String label,
     required String value,
-    required String helper,
     required IconData icon,
     required Color color,
-    VoidCallback? onTap,
   }) {
     final theme = Theme.of(context);
     return DesignSystemCard(
       glass: true,
-      onTap: onTap,
-      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDesignSystem.s12,
+        vertical: AppDesignSystem.s12,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AppDesignSystem.s12),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppDesignSystem.r12),
-                ),
-                child: Icon(icon, color: color, size: 18),
-              ),
-              const Spacer(),
-              if (onTap != null)
-                Icon(
-                  Icons.arrow_forward_rounded,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.45),
-                ),
-            ],
+          Icon(icon, color: color, size: 16),
+          const VSpace.sm(),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+            ),
           ),
-          const VSpace.md(),
-          Text(title, style: theme.textTheme.bodySmall),
           const VSpace.xs(),
           Text(
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleLarge,
-          ),
-          const VSpace.sm(),
-          Text(
-            helper,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
           ),
         ],
       ),
@@ -553,101 +482,90 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildQuickActions() {
-    return Wrap(
-      spacing: AppDesignSystem.s12,
-      runSpacing: AppDesignSystem.s12,
-      children: [
-        _buildActionItem(
-          icon: Icons.add_rounded,
-          label: 'Add',
-          description: 'Manual entry',
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              backgroundColor: Colors.transparent,
-              builder: (context) =>
-                  ExpenseDialog(onTransactionSaved: _loadExpenses),
-            );
-          },
+    final actions = [
+      _QuickAction(
+        icon: Icons.add_rounded,
+        label: 'Add',
+        description: 'Manual entry',
+        color: AppDesignSystem.brandPrimary,
+        onTap: () => showModalBottomSheet(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (context) => ExpenseDialog(onTransactionSaved: _loadExpenses),
         ),
-        _buildActionItem(
-          icon: Icons.inbox_rounded,
-          label: 'Inbox',
-          description: 'SMS and alerts',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SmartInboxScreen()),
-            );
-          },
+      ),
+      _QuickAction(
+        icon: Icons.inbox_rounded,
+        label: 'Inbox',
+        description: 'SMS & alerts',
+        color: AppDesignSystem.brandAccent,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const SmartInboxScreen()),
         ),
-        _buildActionItem(
-          icon: Icons.payments_rounded,
-          label: 'Pay',
-          description: 'UPI tools',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const ScanUPIScreen()),
-            );
-          },
+      ),
+      _QuickAction(
+        icon: Icons.qr_code_scanner_rounded,
+        label: 'Pay',
+        description: 'UPI tools',
+        color: AppDesignSystem.brandSecondary,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ScanUPIScreen()),
         ),
-        _buildActionItem(
-          icon: Icons.auto_awesome_rounded,
-          label: 'AI Advice',
-          description: 'Forecasts',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const AIPredictionsScreen(),
-              ),
-            );
-          },
+      ),
+      _QuickAction(
+        icon: Icons.auto_awesome_rounded,
+        label: 'AI Advice',
+        description: 'Forecasts',
+        color: AppDesignSystem.brandInfo,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AIPredictionsScreen()),
         ),
-      ],
-    );
-  }
+      ),
+    ];
 
-  Widget _buildActionItem({
-    required IconData icon,
-    required String label,
-    required String description,
-    required VoidCallback onTap,
-  }) {
-    final theme = Theme.of(context);
     final cardWidth = (MediaQuery.of(context).size.width -
             (AppDesignSystem.s24 * 2) -
             AppDesignSystem.s12) /
         2;
 
-    return SizedBox(
-      width: cardWidth,
-      child: DesignSystemCard(
-        glass: true,
-        onTap: onTap,
-        padding: const EdgeInsets.all(AppDesignSystem.s16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppDesignSystem.s16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(AppDesignSystem.r16),
-                border: Border.all(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                ),
-              ),
-              child: Icon(icon, color: theme.colorScheme.primary, size: 24),
+    return Wrap(
+      spacing: AppDesignSystem.s12,
+      runSpacing: AppDesignSystem.s12,
+      children: actions.map((action) {
+        return SizedBox(
+          width: cardWidth,
+          child: _buildActionItem(action),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildActionItem(_QuickAction action) {
+    final theme = Theme.of(context);
+    return DesignSystemCard(
+      glass: true,
+      onTap: action.onTap,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(AppDesignSystem.s12),
+            decoration: BoxDecoration(
+              color: action.color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDesignSystem.r16),
             ),
-            const VSpace.md(),
-            Text(label, style: theme.textTheme.titleMedium),
-            const VSpace.xs(),
-            Text(description, style: theme.textTheme.bodySmall),
-          ],
-        ),
+            child: Icon(action.icon, color: action.color, size: 22),
+          ),
+          const VSpace.md(),
+          Text(action.label, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const VSpace.xs(),
+          Text(action.description, style: theme.textTheme.bodySmall),
+        ],
       ),
     );
   }
@@ -722,13 +640,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRecentTransactionsHeader() {
-    return Text(
-      'Recent Activity',
-      style: Theme.of(context).textTheme.titleLarge,
     );
   }
 
@@ -809,6 +720,83 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           );
         }, childCount: displayItemsCount),
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  const _SectionHeader(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        title.toUpperCase(),
+        style: theme.textTheme.labelLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final String description;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.color,
+    required this.onTap,
+  });
+}
+
+// Animated counter that counts up from 0 to the target balance on load
+class _AnimatedBalanceCounter extends StatelessWidget {
+  final double balance;
+  final AnimationController animationController;
+
+  const _AnimatedBalanceCounter({
+    required this.balance,
+    required this.animationController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isNegative = balance < 0;
+    final color = isNegative ? AppDesignSystem.error : AppDesignSystem.success;
+
+    return AnimatedBuilder(
+      animation: CurvedAnimation(
+        parent: animationController,
+        curve: Curves.easeOutCubic,
+      ),
+      builder: (context, _) {
+        final progress = CurvedAnimation(
+          parent: animationController,
+          curve: Curves.easeOutCubic,
+        ).value;
+        final displayed = balance * progress;
+        return Text(
+          '$_rupee${displayed.abs().toStringAsFixed(2)}',
+          style: theme.textTheme.displayMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            letterSpacing: -1,
+            color: isNegative ? color : null,
+          ),
+        );
+      },
     );
   }
 }

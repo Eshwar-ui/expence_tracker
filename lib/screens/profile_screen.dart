@@ -7,6 +7,7 @@ import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/utils/app_constants.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/services/security_service.dart';
+import 'package:expence_tracker/services/reminder_service.dart';
 import 'package:expence_tracker/models/app_user.dart';
 import 'package:intl/intl.dart';
 
@@ -21,7 +22,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final SecurityService _securityService = SecurityService();
+  final ReminderService _reminderService = ReminderService();
   bool _deviceLockEnabled = false;
+  bool _reminderEnabled = false;
+  TimeOfDay _reminderTime =
+      const TimeOfDay(hour: ReminderService.defaultHour, minute: ReminderService.defaultMinute);
   Future<AppUser?>? _userFuture;
 
   @override
@@ -29,7 +34,88 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadSecuritySettings();
+    _loadReminderSettings();
     _loadUserData();
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final enabled = await _reminderService.isEnabled();
+    final time = await _reminderService.getReminderTime();
+    if (!mounted) return;
+    setState(() {
+      _reminderEnabled = enabled;
+      _reminderTime = time;
+    });
+  }
+
+  String _formatReminderTime(TimeOfDay time) {
+    final dt = DateTime(2000, 1, 1, time.hour, time.minute);
+    return DateFormat.jm().format(dt);
+  }
+
+  Future<void> _toggleReminder(bool value) async {
+    if (value) {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: _reminderTime,
+        helpText: 'Pick reminder time',
+      );
+      if (picked == null) return;
+
+      final ok = await _reminderService.enable(picked);
+      if (!mounted) return;
+      if (!ok) {
+        showDesignSystemSnackBar(
+          context: context,
+          message: 'Notification permission denied. Enable it in Settings.',
+          isError: true,
+        );
+        return;
+      }
+      setState(() {
+        _reminderEnabled = true;
+        _reminderTime = picked;
+      });
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Daily reminder set for ${_formatReminderTime(picked)}',
+      );
+    } else {
+      await _reminderService.disable();
+      if (!mounted) return;
+      setState(() => _reminderEnabled = false);
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Daily reminder turned off',
+      );
+    }
+  }
+
+  Future<void> _changeReminderTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _reminderTime,
+      helpText: 'Pick reminder time',
+    );
+    if (picked == null || !mounted) return;
+    final ok = await _reminderService.enable(picked);
+    if (!mounted) return;
+    if (!ok) {
+      showDesignSystemSnackBar(
+        context: context,
+        message: 'Notification permission denied. Enable it in Settings.',
+        isError: true,
+      );
+      return;
+    }
+    setState(() {
+      _reminderEnabled = true;
+      _reminderTime = picked;
+    });
+    showDesignSystemSnackBar(
+      context: context,
+      message: 'Reminder updated to ${_formatReminderTime(picked)}',
+    );
   }
 
   @override
@@ -315,6 +401,42 @@ class _ProfileScreenState extends State<ProfileScreen>
             title: 'Security',
             subtitle: 'Biometrics and PIN',
             onTap: () => _showSecurityDialog(context),
+          ),
+          _divider(),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                _iconBox(Icons.notifications_active_rounded, Colors.indigo),
+                const HSpace.md(),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Daily Reminder',
+                          style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        _reminderEnabled
+                            ? 'Every day at ${_formatReminderTime(_reminderTime)}'
+                            : 'Get a nudge to log expenses',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                if (_reminderEnabled)
+                  IconButton(
+                    icon: const Icon(Icons.schedule_rounded, size: 20),
+                    onPressed: _changeReminderTime,
+                    tooltip: 'Change time',
+                  ),
+                Switch.adaptive(
+                  value: _reminderEnabled,
+                  activeTrackColor: Theme.of(context).colorScheme.primary,
+                  onChanged: _toggleReminder,
+                ),
+              ],
+            ),
           ),
           _divider(),
           Padding(

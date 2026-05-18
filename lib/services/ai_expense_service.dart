@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'dart:convert';
@@ -5,6 +6,20 @@ import 'dart:math' as math;
 import '../models/expence.dart';
 import '../models/expense_prediction.dart';
 import 'firestore_service.dart';
+
+/// Outcome of a prediction attempt — bundles the prediction with the source
+/// (tflite or rule-based fallback) so the UI can label what it shows.
+class PredictionResult {
+  final ExpensePrediction prediction;
+  final String source; // 'tflite' | 'fallback'
+  final String? note;
+
+  const PredictionResult({
+    required this.prediction,
+    required this.source,
+    this.note,
+  });
+}
 
 /// Service for AI-powered expense prediction using TensorFlow Lite
 class AIExpenseService {
@@ -69,10 +84,72 @@ class AIExpenseService {
       }
       _isInitialized = true;
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('AIExpenseService.initialize failed: $e\n$st');
       _interpreter = null;
       _isInitialized = false;
       return false;
+    }
+  }
+
+  /// Try TFLite first, fall back to a 30-day averaging predictor if TFLite
+  /// is unavailable or there isn't enough history for the model.
+  Future<PredictionResult?> predictWithFallback({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final tflite = await predictFutureExpenses(
+      startDate: startDate,
+      endDate: endDate,
+    );
+    if (tflite != null) {
+      return PredictionResult(prediction: tflite, source: 'tflite');
+    }
+
+    final fallback = await _averagingPredict();
+    if (fallback == null) return null;
+    return PredictionResult(
+      prediction: fallback,
+      source: 'fallback',
+      note: 'Local TFLite model unavailable or not enough history — using a '
+          '30-day rolling average.',
+    );
+  }
+
+  Future<ExpensePrediction?> _averagingPredict() async {
+    try {
+      final now = DateTime.now();
+      final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+      final expenses = await _firestoreService.getExpensesByDateRange(
+        thirtyDaysAgo,
+        now,
+      );
+      final expenseOnly =
+          expenses.where((e) => e.type == TransactionType.expense).toList();
+      if (expenseOnly.isEmpty) return null;
+
+      final total =
+          expenseOnly.fold<double>(0.0, (sum, e) => sum + e.amount);
+      final avgDaily = total / 30;
+      final dailyPredictions = List<double>.filled(30, avgDaily);
+
+      final categoryTotals = <String, double>{};
+      for (final e in expenseOnly) {
+        categoryTotals[e.category] =
+            (categoryTotals[e.category] ?? 0.0) + e.amount;
+      }
+
+      return ExpensePrediction(
+        dailyPredictions: dailyPredictions,
+        categoryPredictions: categoryTotals,
+        totalPredictedSpending: avgDaily * 30,
+        anomalyScore: 0.0,
+        predictionDate: now,
+        predictionStartDate: now.add(const Duration(days: 1)),
+      );
+    } catch (e) {
+      debugPrint('AIExpenseService._averagingPredict failed: $e');
+      return null;
     }
   }
 
@@ -137,7 +214,8 @@ class AIExpenseService {
 
       final predictions = _runInference(features);
       return _processPredictions(predictions, filteredExpenses);
-    } catch (_) {
+    } catch (e, st) {
+      debugPrint('AIExpenseService.predictFutureExpenses failed: $e\n$st');
       return null;
     }
   }

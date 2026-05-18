@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/expence.dart';
 import '../models/expense_prediction.dart';
+import '../services/ai_expense_service.dart';
 import '../services/firestore_service.dart';
 import '../services/gemini_ai_service.dart';
 import '../utils/app_design_system.dart';
@@ -18,6 +19,7 @@ class AIPredictionsScreen extends StatefulWidget {
 
 class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
   final GeminiAIService _aiService = GeminiAIService();
+  final AIExpenseService _mlService = AIExpenseService();
   final FirestoreService _firestoreService = FirestoreService();
   final NumberFormat _money =
       NumberFormat.currency(locale: 'en_IN', symbol: '\u20B9', decimalDigits: 0);
@@ -27,6 +29,8 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
   List<Expense> _recentExpenses = [];
   bool _isLoading = false;
   bool _usingFallbackInsights = false;
+  String _predictionSource = 'fallback'; // 'tflite' | 'fallback' | 'none'
+  String? _predictionNote;
   String? _errorMessage;
   DateTime? _analysisStart;
   DateTime? _analysisEnd;
@@ -64,13 +68,21 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
         return;
       }
 
-      final insights = await _aiService.generateInsights(_recentExpenses);
-      final prediction = await _aiService.predictFutureExpenses();
+      final insightsFuture = _aiService.generateInsights(_recentExpenses);
+      final predictionFuture = _mlService.predictWithFallback();
+      final results = await Future.wait<dynamic>([
+        insightsFuture,
+        predictionFuture,
+      ]);
+      final insights = results[0] as List<SpendingInsight>;
+      final predictionResult = results[1] as PredictionResult?;
 
       if (!mounted) return;
       setState(() {
         _insights = insights;
-        _prediction = prediction;
+        _prediction = predictionResult?.prediction;
+        _predictionSource = predictionResult?.source ?? 'none';
+        _predictionNote = predictionResult?.note;
         _usingFallbackInsights = !_aiService.isConfigured;
         _isLoading = false;
       });
@@ -151,16 +163,42 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
 
   Widget _buildStatusBanner() {
     final theme = Theme.of(context);
-    final bannerColor = _usingFallbackInsights
-        ? AppDesignSystem.brandAccent
-        : AppDesignSystem.brandInfo;
 
-    final title =
-        _usingFallbackInsights ? 'Experimental AI mode' : 'AI analysis available';
+    final geminiOk = !_usingFallbackInsights;
+    final tfliteOk = _predictionSource == 'tflite';
 
-    final message = _usingFallbackInsights
-        ? 'Gemini is not configured, so these insights are generated from local rules and recent transaction patterns.'
-        : 'Insights are generated from your recent transactions and should still be reviewed before acting on them.';
+    final bannerColor = (geminiOk && tfliteOk)
+        ? AppDesignSystem.brandInfo
+        : AppDesignSystem.brandAccent;
+    final icon =
+        (geminiOk && tfliteOk) ? Icons.auto_awesome_rounded : Icons.science_rounded;
+
+    final title = (geminiOk && tfliteOk)
+        ? 'AI analysis available'
+        : (!geminiOk && !tfliteOk)
+            ? 'Rule-based mode'
+            : !tfliteOk
+                ? 'AI insights · Estimated forecast'
+                : 'On-device forecast · Rule-based insights';
+
+    final parts = <String>[];
+    if (!geminiOk) {
+      parts.add(
+        'Gemini key not configured — insights come from local heuristics.',
+      );
+    }
+    if (!tfliteOk) {
+      parts.add(
+        _predictionNote ??
+            'Local TFLite predictor unavailable — using a 30-day rolling average.',
+      );
+    }
+    if (parts.isEmpty) {
+      parts.add(
+        'Insights come from Gemini; the 30-day forecast is from your on-device model. Review before acting.',
+      );
+    }
+    final message = parts.join(' ');
 
     return DesignSystemCard(
       glass: true,
@@ -175,12 +213,7 @@ class _AIPredictionsScreenState extends State<AIPredictionsScreen> {
               color: bannerColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              _usingFallbackInsights
-                  ? Icons.science_rounded
-                  : Icons.auto_awesome_rounded,
-              color: bannerColor,
-            ),
+            child: Icon(icon, color: bannerColor),
           ),
           const HSpace.md(),
           Expanded(

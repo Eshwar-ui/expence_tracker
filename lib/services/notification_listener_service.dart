@@ -129,6 +129,18 @@ class NotificationListenerService {
     final text = payload.text.trim();
     if (title.isEmpty && text.isEmpty) return;
 
+    // Hard-reject OTPs, cart/promo reminders, balance-only updates before
+    // parsing — they often contain currency amounts and fool the scorer.
+    final rejection = RejectionRules.rejectionReason(
+      text,
+      title: title,
+      sender: payload.packageName,
+    );
+    if (rejection != null) {
+      debugPrint('$_logTag: rejected ($rejection) ${payload.packageName}');
+      return;
+    }
+
     final parsingResult = NotificationParsing.parse(
       text,
       title: title,

@@ -16,6 +16,83 @@ class ParsingResult {
   bool get isValid => amount != null && confidence > 0.0;
 }
 
+/// Hard-rejection rules. Anything matching these patterns is NOT a financial
+/// transaction and should be dropped before scoring.
+class RejectionRules {
+  // OTPs, login codes, verification PINs.
+  static final RegExp _otp = RegExp(
+    r'\b(otp|one[\s-]?time[\s-]?password|verification\s+code|login\s+code|'
+    r'security\s+code|auth\s+code|access\s+code|confirmation\s+code|'
+    r'do\s+not\s+share|never\s+share|don’t\s+share)\b',
+    caseSensitive: false,
+  );
+  // Standalone 4-8 digit codes accompanied by "is" / ":" — classic OTP shape.
+  static final RegExp _codeShape = RegExp(
+    r'\b(code|pin|otp)\s*(is|:)\s*\d{4,8}\b',
+    caseSensitive: false,
+  );
+
+  // Promotional / marketing.
+  static final RegExp _promo = RegExp(
+    r'\b(offer|discount|sale|deal|flat\s*\d+%|upto\s*\d+%|coupon|promo\s*code|'
+    r'limited\s+time|hurry|expires?\s+today|click\s+here|t&c|t\s*and\s*c\s+apply|'
+    r'subscribe|unsubscribe|advertisement|sponsored)\b',
+    caseSensitive: false,
+  );
+
+  // Cart / wishlist / reminder — NOT a completed transaction.
+  static final RegExp _cartReminder = RegExp(
+    r'\b(cart|wishlist|waiting\s+for\s+you|items?\s+in\s+your\s+cart|'
+    r'left\s+in\s+your\s+cart|complete\s+your\s+(order|purchase|payment)|'
+    r'don’?t\s+miss\s+out|order\s+now|buy\s+now|shop\s+now|grab\s+now)\b',
+    caseSensitive: false,
+  );
+
+  // Balance / statement summaries (informational, not a new transaction).
+  static final RegExp _balanceOnly = RegExp(
+    r'\b(available\s+(bal|balance)|a\s*v\s*a\s*i\s*l\s*\.?\s*bal|'
+    r'closing\s+balance|opening\s+balance|min(imum)?\s+balance|'
+    r'statement\s+(generated|ready)|due\s+(date|on))\b',
+    caseSensitive: false,
+  );
+
+  // Common DLT promotional/service header prefixes used by Indian carriers
+  // for marketing SMS. Transactional SMS use TX-/JX-/JK- typically, while
+  // promotional use AD-/VM-/VK-/AX-/TM-/BP-/BZ-/DM-/DZ- etc.
+  static final RegExp _promoHeader = RegExp(
+    r'^(AD|VM|VK|AX|TM|BP|BZ|DM|DZ|PM|PR)[-\s][A-Z0-9]{2,}',
+    caseSensitive: false,
+  );
+
+  /// Returns the rejection reason (e.g. "otp", "promo") or null if nothing
+  /// matches. Caller decides whether to drop or downgrade.
+  static String? rejectionReason(
+    String text, {
+    String? title,
+    String? sender,
+  }) {
+    final combined = '${title ?? ''} $text'.trim();
+
+    if (_otp.hasMatch(combined) || _codeShape.hasMatch(combined)) {
+      return 'otp';
+    }
+    if (_cartReminder.hasMatch(combined)) return 'cart_reminder';
+    if (_promo.hasMatch(combined)) return 'promo';
+    // Balance-only message: only reject if there's no debit/credit keyword,
+    // because a real txn SMS often includes the balance alongside.
+    if (_balanceOnly.hasMatch(combined) &&
+        !RegExp(r'\b(debited|credited|spent|paid|withdrawn|deposited|received|charged)\b',
+                caseSensitive: false)
+            .hasMatch(combined)) {
+      return 'balance_only';
+    }
+    if (sender != null && _promoHeader.hasMatch(sender)) {
+      return 'promo_sender';
+    }
+    return null;
+  }
+}
+
 class NotificationParsing {
   static const List<String> _creditKeywords = [
     'credited',
@@ -92,13 +169,21 @@ class NotificationParsing {
 
     double confidence = 0.0;
     if (amount != null) {
-      confidence += 0.5;
-      if (amountHasContext) {
-        confidence += 0.1;
-      }
+      confidence += 0.4;
+      if (amountHasContext) confidence += 0.15;
     }
     if (type != null) confidence += 0.25;
     if (merchant != null) confidence += 0.15;
+
+    // Require at least 2 strong signals. Amount alone is not enough — too many
+    // promo/balance notifications contain a currency amount.
+    final signalCount = [
+      amount != null && amountHasContext,
+      type != null,
+      merchant != null,
+    ].where((s) => s).length;
+    if (signalCount < 2) confidence = (confidence * 0.5).clamp(0.0, 1.0);
+
     if (confidence > 1.0) confidence = 1.0;
 
     return ParsingResult(
@@ -229,7 +314,7 @@ class ValidationResult {
 }
 
 class NotificationValidation {
-  static const double defaultMinConfidence = 0.6;
+  static const double defaultMinConfidence = 0.75;
   static const double maxAmount = 100000000;
 
   static ValidationResult validate(

@@ -14,65 +14,75 @@ const reminderMessages = [
   "Daily check-in: Log your income and expenses to keep your dashboard accurate! 📊🚀",
 ];
 
-// Scheduled function: Every hour to check user preferences
+// Cron runs every minute (Asia/Kolkata). Matches users whose
+// preferredNotificationTime == "HH:MM" right now, are opted-in, and haven't
+// already logged today. Sends an FCM push with a randomized message.
 exports.dailyReminder = functions.pubsub
-  .schedule("0 * * * *")
+  .schedule("* * * * *")
   .timeZone("Asia/Kolkata")
-  .onRun(async (context) => {
-    const now = new Date();
-    // Format current hour as "HH:00" to match our hourly schedule
-    const currentHour = now.getHours().toString().padStart(2, "0") + ":00";
-    
-    // Also check for user's specific minutes if needed, but for now we'll match by hour
-    // A better approach is to store the hour as an integer or string "HH:00"
-    
-    console.log(`Checking for users with reminder preference: ${currentHour}`);
+  .onRun(async () => {
+    const now = new Date(
+      new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}),
+    );
+    const hh = now.getHours().toString().padStart(2, "0");
+    const mm = now.getMinutes().toString().padStart(2, "0");
+    const currentTime = `${hh}:${mm}`;
+    const todayKey =
+      `${now.getFullYear()}-` +
+      `${(now.getMonth() + 1).toString().padStart(2, "0")}-` +
+      `${now.getDate().toString().padStart(2, "0")}`;
 
-    const usersSnapshot = await db.collection("users")
-      .where("preferredNotificationTime", "==", currentHour)
+    const usersSnapshot = await db
+      .collection("users")
+      .where("preferredNotificationTime", "==", currentTime)
       .get();
-    
-    if (usersSnapshot.empty) {
-      console.log("No users to remind this hour.");
-      return null;
-    }
 
-    const promises = [];
+    if (usersSnapshot.empty) return null;
 
+    const sends = [];
     usersSnapshot.forEach((userDoc) => {
-      const userId = userDoc.id;
-      const message = reminderMessages[Math.floor(Math.random() * reminderMessages.length)];
+      const data = userDoc.data() || {};
+      if (data.reminderEnabled !== true) return;
+      if (data.reminderLastLoggedDate === todayKey) return;
 
-      const tokenPromise = db
-        .collection("users")
-        .doc(userId)
-        .collection("fcm_tokens")
-        .get()
-        .then(async (tokenSnapshot) => {
-          const tokens = [];
-          tokenSnapshot.forEach((doc) => tokens.push(doc.data().token));
+      const token = data.fcmToken;
+      if (!token || typeof token !== "string") return;
 
-          if (tokens.length > 0) {
-            const payload = {
-              notification: {
-                title: "Daily Expense Reminder",
-                body: message,
-              },
-              data: {
-                click_action: "FLUTTER_NOTIFICATION_CLICK",
-                screen: "/transactions",
-              },
-            };
-            return admin.messaging().sendToDevice(tokens, payload);
+      const message =
+        reminderMessages[Math.floor(Math.random() * reminderMessages.length)];
+
+      sends.push(
+        admin.messaging().send({
+          token: token,
+          notification: {
+            title: "Daily Expense Reminder",
+            body: message,
+          },
+          data: {
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+            screen: "/transactions",
+          },
+          android: {
+            priority: "high",
+            notification: {channelId: "daily_expense_reminder"},
+          },
+        }).catch(async (err) => {
+          // Token rotated or unregistered — clear it so we stop retrying.
+          if (
+            err.code === "messaging/registration-token-not-registered" ||
+            err.code === "messaging/invalid-registration-token"
+          ) {
+            await userDoc.ref.update({fcmToken: admin.firestore.FieldValue.delete()});
+          } else {
+            console.error(`send failed for ${userDoc.id}:`, err.message);
           }
-          return null;
-        });
-
-      promises.push(tokenPromise);
+        }),
+      );
     });
 
-    await Promise.all(promises);
-    return console.log(`${promises.length} Daily reminders sent successfully.`);
+    await Promise.all(sends);
+    console.log(`dailyReminder@${currentTime}: sent ${sends.length}`);
+    return null;
   });
 
 // Firestore Trigger: When a new expense is added, check budget
@@ -122,28 +132,29 @@ exports.onExpenseCreated = functions.firestore
     }
 
     if (title && body) {
-      const tokenSnapshot = await db
-        .collection("users")
-        .doc(userId)
-        .collection("fcm_tokens")
-        .get();
-
-      const tokens = [];
-      tokenSnapshot.forEach((doc) => tokens.push(doc.data().token));
-
-      if (tokens.length > 0) {
-        const payload = {
-          notification: {
-            title: title,
-            body: body,
-          },
-          data: {
-            click_action: "FLUTTER_NOTIFICATION_CLICK",
-            screen: "/budget",
-          },
-        };
-        await admin.messaging().sendToDevice(tokens, payload);
-        console.log(`Notification sent for category ${category}`);
+      const userDoc = await db.collection("users").doc(userId).get();
+      const token = userDoc.exists ? userDoc.data().fcmToken : null;
+      if (token && typeof token === "string") {
+        try {
+          await admin.messaging().send({
+            token: token,
+            notification: {title: title, body: body},
+            data: {
+              click_action: "FLUTTER_NOTIFICATION_CLICK",
+              screen: "/budget",
+            },
+          });
+          console.log(`Budget notification sent for category ${category}`);
+        } catch (err) {
+          if (
+            err.code === "messaging/registration-token-not-registered" ||
+            err.code === "messaging/invalid-registration-token"
+          ) {
+            await userDoc.ref.update({fcmToken: admin.firestore.FieldValue.delete()});
+          } else {
+            console.error(`Budget send failed for ${userId}:`, err.message);
+          }
+        }
       }
     }
 

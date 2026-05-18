@@ -67,3 +67,18 @@ crash_log.txt
 key_debug.txt
 keytool_output.txt
 pub_get_output.txt
+
+# Node.js (functions/, backend/, etc.)
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (ml_model/)
+**/venv/
+**/__pycache__/
+*.egg-info/
+
+# Packaged release artifacts
+website.zip
+website/downloads/*.zip

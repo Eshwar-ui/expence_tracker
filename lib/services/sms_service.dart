@@ -1,6 +1,7 @@
 import 'package:another_telephony/telephony.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/transaction_sms.dart';
+import '../utils/notification_parsing.dart';
 import '../utils/transaction_parser.dart';
 
 class SMSService {
@@ -64,6 +65,13 @@ class SMSService {
   TransactionSMS? _parse(SmsMessage message) {
     final body = TransactionParser.normalizeText(message.body ?? '');
     final sender = TransactionParser.normalizeText(message.address ?? '');
+
+    // Drop OTPs, promo blasts, cart reminders, balance-only summaries even if
+    // they squeaked past isBankMessage() (e.g., HDFC promo blasts).
+    if (RejectionRules.rejectionReason(body, sender: sender) != null) {
+      return null;
+    }
+
     final amount = TransactionParser.extractAmount(body);
 
     if (amount == null) return null;

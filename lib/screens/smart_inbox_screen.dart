@@ -68,6 +68,10 @@ class SmartInboxScreen extends StatelessWidget {
                           AppDesignSystem.r12,
                         ),
                       ),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      tabAlignment: TabAlignment.fill,
+                      splashBorderRadius:
+                          BorderRadius.circular(AppDesignSystem.r12),
                       labelColor: theme.colorScheme.primary,
                       unselectedLabelColor:
                           theme.colorScheme.onSurface.withValues(alpha: 0.65),

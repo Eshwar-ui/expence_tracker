@@ -331,38 +331,43 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         AppDesignSystem.s24,
         AppDesignSystem.s16,
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildSummaryCard(
-              theme: theme,
-              title: 'Showing',
-              value: _displayTransactions.length.toString(),
-              helper: _activeFilterCount == 0 ? 'All transactions' : 'Filtered',
-              color: AppDesignSystem.brandPrimary,
+      // IntrinsicHeight + stretch makes the three cards take the height of
+      // the tallest one, even if helper lines wrap differently.
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: _buildSummaryCard(
+                theme: theme,
+                title: 'Showing',
+                value: _displayTransactions.length.toString(),
+                helper: _activeFilterCount == 0 ? 'All transactions' : 'Filtered',
+                color: AppDesignSystem.brandPrimary,
+              ),
             ),
-          ),
-          const HSpace.md(),
-          Expanded(
-            child: _buildSummaryCard(
-              theme: theme,
-              title: 'Income',
-              value: '$_rupee${income.toStringAsFixed(0)}',
-              helper: 'Visible results',
-              color: AppDesignSystem.success,
+            const HSpace.md(),
+            Expanded(
+              child: _buildSummaryCard(
+                theme: theme,
+                title: 'Income',
+                value: '$_rupee${income.toStringAsFixed(0)}',
+                helper: 'Visible results',
+                color: AppDesignSystem.success,
+              ),
             ),
-          ),
-          const HSpace.md(),
-          Expanded(
-            child: _buildSummaryCard(
-              theme: theme,
-              title: 'Spent',
-              value: '$_rupee${expenses.toStringAsFixed(0)}',
-              helper: 'Visible results',
-              color: AppDesignSystem.error,
+            const HSpace.md(),
+            Expanded(
+              child: _buildSummaryCard(
+                theme: theme,
+                title: 'Spent',
+                value: '$_rupee${expenses.toStringAsFixed(0)}',
+                helper: 'Visible results',
+                color: AppDesignSystem.error,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

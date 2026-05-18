@@ -213,37 +213,44 @@ class _ReportsScreenState extends State<ReportsScreen>
     final recordedDays = data.dailyBreakdown.length;
     final budgetUsage = data.budgetStatus.budgetUtilizationPercentage;
 
-    return Row(children: [
-      Expanded(
-        child: _summaryPill(
-          'Month',
-          DateFormat('MMM yyyy').format(_selectedMonth),
-          Icons.calendar_month_rounded,
-          AppDesignSystem.brandPrimary,
-        ),
+    // IntrinsicHeight + stretch so all three pills match the tallest one
+    // (the third pill has a subtitle, the others don't).
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _summaryPill(
+              'Month',
+              DateFormat('MMM yyyy').format(_selectedMonth),
+              Icons.calendar_month_rounded,
+              AppDesignSystem.brandPrimary,
+            ),
+          ),
+          const HSpace.md(),
+          Expanded(
+            child: _summaryPill(
+              'Transactions',
+              '$transactionCount',
+              Icons.receipt_long_rounded,
+              AppDesignSystem.brandInfo,
+            ),
+          ),
+          const HSpace.md(),
+          Expanded(
+            child: _summaryPill(
+              'Budget',
+              data.budgetStatus.totalBudget == 0
+                  ? 'Not set'
+                  : '${budgetUsage.toStringAsFixed(0)}%',
+              Icons.pie_chart_rounded,
+              AppDesignSystem.brandAccent,
+              subtitle: '$recordedDays active days',
+            ),
+          ),
+        ],
       ),
-      const HSpace.md(),
-      Expanded(
-        child: _summaryPill(
-          'Transactions',
-          '$transactionCount',
-          Icons.receipt_long_rounded,
-          AppDesignSystem.brandInfo,
-        ),
-      ),
-      const HSpace.md(),
-      Expanded(
-        child: _summaryPill(
-          'Budget',
-          data.budgetStatus.totalBudget == 0
-              ? 'Not set'
-              : '${budgetUsage.toStringAsFixed(0)}%',
-          Icons.pie_chart_rounded,
-          AppDesignSystem.brandAccent,
-          subtitle: '$recordedDays active days',
-        ),
-      ),
-    ]);
+    );
   }
 
   Widget _summaryPill(

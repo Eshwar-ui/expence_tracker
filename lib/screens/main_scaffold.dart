@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:expence_tracker/screens/expense_dialog.dart';
 import 'package:expence_tracker/screens/home.dart';
 import 'package:expence_tracker/screens/transactions_screen.dart';
 import 'package:expence_tracker/screens/reports_screen.dart';
@@ -105,63 +107,88 @@ class _MainScaffoldState extends State<MainScaffold>
     );
   }
 
+  void _openAddExpense() {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => ExpenseDialog(
+        onTransactionSaved: () {
+          // Refresh home if on home tab
+          if (_currentIndex == 0) {
+            setState(() {});
+          }
+        },
+      ),
+    );
+  }
+
   Widget _buildModernBottomNavBar() {
+    final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
+          color: theme.colorScheme.primary.withValues(alpha: 0.2),
           width: 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.2),
-            blurRadius: 20,
+            color: theme.colorScheme.primary.withValues(alpha: 0.18),
+            blurRadius: 24,
             offset: const Offset(0, 8),
-          ),
-          BoxShadow(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 0),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: SizedBox(
           height: 80,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _ModernNavItem(
-                label: 'Dashboard',
-                isActive: _currentIndex == 0,
-                activeIcon: Icons.dashboard_rounded,
-                inactiveIcon: Icons.dashboard_outlined,
-                onTap: () => _onTap(0),
+              Expanded(
+                child: _ModernNavItem(
+                  label: 'Home',
+                  isActive: _currentIndex == 0,
+                  activeIcon: Icons.home_rounded,
+                  inactiveIcon: Icons.home_outlined,
+                  onTap: () => _onTap(0),
+                ),
               ),
-              _ModernNavItem(
-                label: 'Transactions',
-                isActive: _currentIndex == 1,
-                activeIcon: Icons.swap_horiz_rounded,
-                inactiveIcon: Icons.swap_horiz_outlined,
-                onTap: () => _onTap(1),
+              Expanded(
+                child: _ModernNavItem(
+                  label: 'Transactions',
+                  isActive: _currentIndex == 1,
+                  activeIcon: Icons.receipt_long_rounded,
+                  inactiveIcon: Icons.receipt_long_outlined,
+                  onTap: () => _onTap(1),
+                ),
               ),
-              _ModernNavItem(
-                label: 'Reports',
-                isActive: _currentIndex == 2,
-                activeIcon: Icons.analytics_rounded,
-                inactiveIcon: Icons.analytics_outlined,
-                onTap: () => _onTap(2),
+              // Center "+" button
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                child: _AddButton(onTap: _openAddExpense),
               ),
-              _ModernNavItem(
-                label: 'Profile',
-                isActive: _currentIndex == 3,
-                activeIcon: Icons.person_rounded,
-                inactiveIcon: Icons.person_outline_rounded,
-                onTap: () => _onTap(3),
+              Expanded(
+                child: _ModernNavItem(
+                  label: 'Reports',
+                  isActive: _currentIndex == 2,
+                  activeIcon: Icons.analytics_rounded,
+                  inactiveIcon: Icons.analytics_outlined,
+                  onTap: () => _onTap(2),
+                ),
+              ),
+              Expanded(
+                child: _ModernNavItem(
+                  label: 'Profile',
+                  isActive: _currentIndex == 3,
+                  activeIcon: Icons.person_rounded,
+                  inactiveIcon: Icons.person_outline_rounded,
+                  onTap: () => _onTap(3),
+                ),
               ),
             ],
           ),
@@ -173,6 +200,71 @@ class _MainScaffoldState extends State<MainScaffold>
   void _onTap(int index) {
     if (_currentIndex == index) return;
     setState(() => _currentIndex = index);
+  }
+}
+
+class _AddButton extends StatefulWidget {
+  final VoidCallback onTap;
+
+  const _AddButton({required this.onTap});
+
+  @override
+  State<_AddButton> createState() => _AddButtonState();
+}
+
+class _AddButtonState extends State<_AddButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+      value: 1.0,
+    );
+    _scale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _ctrl.reverse(),
+      onTapUp: (_) {
+        _ctrl.forward();
+        widget.onTap();
+      },
+      onTapCancel: () => _ctrl.forward(),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            gradient: AppDesignSystem.primaryGradient,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppDesignSystem.brandPrimary.withValues(alpha: 0.45),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+        ),
+      ),
+    );
   }
 }
 
@@ -251,8 +343,8 @@ class _ModernNavItemState extends State<_ModernNavItem>
           child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           decoration: BoxDecoration(
             color: widget.isActive
                 ? activeColor.withValues(alpha: 0.1)
@@ -294,18 +386,19 @@ class _ModernNavItemState extends State<_ModernNavItem>
                 },
               ),
               const SizedBox(height: 4),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 200),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight:
-                      widget.isActive ? FontWeight.w700 : FontWeight.w500,
-                  color: widget.isActive ? activeColor : inactiveColor,
-                ),
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              // FittedBox scales the label down on narrow phones so longer
+              // labels ("Transactions") never ellipse.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 200),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight:
+                        widget.isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: widget.isActive ? activeColor : inactiveColor,
+                  ),
+                  child: Text(widget.label, maxLines: 1, softWrap: false),
                 ),
               ),
             ],
