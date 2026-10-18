@@ -6,6 +6,8 @@ import 'package:expence_tracker/screens/ai_predictions_screen.dart';
 import 'package:expence_tracker/screens/scan_upi_screen.dart';
 import 'package:expence_tracker/screens/smart_inbox_screen.dart';
 import 'package:expence_tracker/services/analytics_service.dart';
+import 'package:expence_tracker/services/firestore_service.dart';
+import 'package:expence_tracker/widgets/expense_heatmap.dart';
 import 'package:expence_tracker/services/home_balance_widget_service.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/services/recurring_transaction_service.dart';
@@ -33,6 +35,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
   AnalyticsData? _analyticsData;
+  late Future<List<Expense>> _heatmapExpenses;
   User? _user;
   bool _isLoading = true;
   String? _loadError;
@@ -85,6 +88,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _isLoading = true;
       _loadError = null;
+      final today = DateUtils.dateOnly(DateTime.now());
+      _heatmapExpenses = FirestoreService().getExpensesByDateRange(
+        ExpenseHeatmap.startDate(today),
+        DateTime(today.year, today.month, today.day + 1)
+            .subtract(const Duration(microseconds: 1)),
+      );
     });
 
     try {
@@ -131,22 +140,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       body: Stack(
         children: [
-          // Single soft top-down gradient — replaces three blurry circles
-          // that previously washed every glass card with brand tint.
+          // Keep the sky fixed while the dashboard scrolls over it.
           Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    AppDesignSystem.brandPrimary
-                        .withValues(alpha: isDark ? 0.12 : 0.06),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.45],
-                ),
-              ),
+            child: Image.asset(
+              isDark
+                  ? 'assets/home_night_sky.png'
+                  : 'assets/home_morning_sky.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.topCenter,
+              excludeFromSemantics: true,
+              gaplessPlayback: true,
+            ),
+          ),
+          // A subtle veil preserves contrast for text outside the glass cards.
+          Positioned.fill(
+            child: ColoredBox(
+              color: isDark
+                  ? AppDesignSystem.darkBg.withValues(alpha: 0.18)
+                  : AppDesignSystem.lightCanvas.withValues(alpha: 0.32),
             ),
           ),
           SafeArea(
@@ -170,9 +181,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             _buildStatusBanner(),
                           ],
                           const VSpace.xl(),
-                          const _SectionHeader('Overview'),
-                          const VSpace.md(),
                           _buildOverviewRow(),
+                          const VSpace.xl(),
+                          FutureBuilder<List<Expense>>(
+                            future: _heatmapExpenses,
+                            builder: (context, snapshot) {
+                              if (snapshot.connectionState !=
+                                  ConnectionState.done) {
+                                return const AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: DesignSystemCard(
+                                    liquidGlass: true,
+                                    child: Center(
+                                        child: CircularProgressIndicator()),
+                                  ),
+                                );
+                              }
+                              if (snapshot.hasError) {
+                                return DesignSystemCard(
+                                  liquidGlass: true,
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                          'Unable to load daily spending.'),
+                                      TextButton(
+                                        onPressed: _loadExpenses,
+                                        child: const Text('Retry'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+                              return ExpenseHeatmap(
+                                  liquidGlass: true,
+                                  expenses: snapshot.data ?? const []);
+                            },
+                          ),
                           const VSpace.xl(),
                           const _SectionHeader('Quick Actions'),
                           const VSpace.md(),
@@ -239,7 +283,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
               child: CircleAvatar(
                 radius: 28,
-                backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                backgroundColor:
+                    theme.colorScheme.primary.withValues(alpha: 0.1),
                 backgroundImage: _user?.photoURL != null
                     ? NetworkImage(_user!.photoURL!)
                     : null,
@@ -271,26 +316,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final budgetUtilization =
         data?.budgetStatus.budgetUtilizationPercentage.round() ?? 0;
     final savingsRate = data?.savingsPercentage.round() ?? 0;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: EdgeInsets.zero,
-      child: Container(
+      child: Padding(
         padding: const EdgeInsets.all(AppDesignSystem.s24),
-        decoration: BoxDecoration(
-          color: isDark ? null : Colors.white,
-          gradient: isDark
-              // ignore: deprecated_member_use_from_same_package
-              ? AppDesignSystem.primaryGradient.withOpacity(0.1)
-              : null,
-          border: isDark
-              ? null
-              : Border.all(
-                  color: AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
-                ),
-          borderRadius: BorderRadius.circular(AppDesignSystem.r24),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -308,8 +338,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     Text(
                       'Net Balance',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                   ],
                 ),
@@ -339,10 +369,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ? '⚠️ $budgetUtilization% of budget used'
                       : '$budgetUtilization% of budget used — keep it up!',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: budgetUtilization >= 90
-                    ? AppDesignSystem.error
-                    : null,
-              ),
+                    color:
+                        budgetUtilization >= 90 ? AppDesignSystem.error : null,
+                  ),
             ),
             const VSpace.lg(),
             ClipRRect(
@@ -376,7 +405,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       child: Row(
         children: [
           Container(
@@ -464,7 +493,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }) {
     final theme = Theme.of(context);
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: const EdgeInsets.symmetric(
         horizontal: AppDesignSystem.s12,
         vertical: AppDesignSystem.s12,
@@ -506,7 +535,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (context) => ExpenseDialog(onTransactionSaved: _loadExpenses),
+          builder: (context) =>
+              ExpenseDialog(onTransactionSaved: _loadExpenses),
         ),
       ),
       _QuickAction(
@@ -561,7 +591,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildActionItem(_QuickAction action) {
     final theme = Theme.of(context);
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       onTap: action.onTap,
       padding: const EdgeInsets.all(AppDesignSystem.s16),
       child: Column(
@@ -576,7 +606,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             child: Icon(action.icon, color: action.color, size: 22),
           ),
           const VSpace.md(),
-          Text(action.label, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(action.label,
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700)),
           const VSpace.xs(),
           Text(action.description, style: theme.textTheme.bodySmall),
         ],
@@ -597,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     if (insight == null && topCategory == null) {
       return DesignSystemCard(
-        glass: true,
+        liquidGlass: true,
         child: Row(
           children: [
             Container(
@@ -629,7 +661,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         'Most of this month\'s spend is in ${topCategory!.key.toLowerCase()}.';
 
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -708,6 +740,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             return Padding(
               padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
               child: PremiumTransactionTile(
+                liquidGlass: true,
                 title: 'Balance Carried Forward',
                 category: 'Carry Forward',
                 amount: openingBalance.abs(),
@@ -724,6 +757,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           return Padding(
             padding: const EdgeInsets.only(bottom: AppDesignSystem.s12),
             child: PremiumTransactionTile(
+              liquidGlass: true,
               title: expense.title,
               category: expense.category,
               amount: expense.amount,
@@ -879,9 +913,8 @@ class _StreakBadge extends StatelessWidget {
         streak.currentStreak == streak.longestStreak &&
         streak.currentStreak >= 3;
 
-    final tint = isPersonalBest
-        ? AppDesignSystem.warning
-        : AppDesignSystem.error;
+    final tint =
+        isPersonalBest ? AppDesignSystem.warning : AppDesignSystem.error;
 
     return Tooltip(
       message: isPersonalBest

@@ -61,6 +61,33 @@ class AppDesignSystem {
     end: Alignment.bottomRight,
   );
 
+  static const Color authDarkLink = Color(0xFFA5B4FC);
+
+  // Quiet, cool-toned backdrops keep translucent authentication surfaces legible.
+  static const LinearGradient authLightGradient = LinearGradient(
+    colors: [
+      Color(0xFFE8E5F7),
+      Color(0xFFF3F2FA),
+      Color(0xFFE8EDF7),
+      Color(0xFFDDEEE8),
+    ],
+    stops: [0, 0.38, 0.68, 1],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
+  static const LinearGradient authDarkGradient = LinearGradient(
+    colors: [
+      Color(0xFF24213F),
+      Color(0xFF141B2E),
+      Color(0xFF11232E),
+      Color(0xFF14332F),
+    ],
+    stops: [0, 0.38, 0.68, 1],
+    begin: Alignment.topRight,
+    end: Alignment.bottomLeft,
+  );
+
   static const LinearGradient successGradient = LinearGradient(
     colors: [Color(0xFF10B981), Color(0xFF059669)],
     begin: Alignment.topLeft,

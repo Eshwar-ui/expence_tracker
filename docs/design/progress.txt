@@ -1,0 +1,1 @@
+2026-10-19: Login/sign-up visual refinement implemented. Retained frosted glass; added shared light/dark gradient tokens; tightened header, form, actions and footer spacing. Analyzer passed. Reviewed normal and compact Android layouts and dark theme. Authentication behavior unchanged.

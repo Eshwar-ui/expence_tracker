@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:expence_tracker/services/auth_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
@@ -104,315 +103,382 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final secondaryText =
+        isDark ? AppDesignSystem.darkTextMed : AppDesignSystem.textMed;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          // Background Gradient decoration
-          Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [
-                        AppDesignSystem.brandPrimary.withValues(alpha: 0.1),
-                        Colors.black
-                      ]
-                    : [
-                        AppDesignSystem.brandPrimary.withValues(alpha: 0.05),
-                        Colors.white
-                      ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-          ),
-
-          // Decorative Circles with Blur
-          Positioned(
-            top: -100,
-            right: -100,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppDesignSystem.brandPrimary.withValues(alpha: 0.2),
+      body: _AuthBackdrop(
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final gutter =
+                  constraints.maxWidth < AppDesignSystem.maxContentWidth
+                      ? AppDesignSystem.s20
+                      : AppDesignSystem.s32;
+              return SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.symmetric(
+                  horizontal: gutter,
+                  vertical: AppDesignSystem.s24,
                 ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            bottom: -50,
-            left: -50,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-              child: Container(
-                width: 200,
-                height: 200,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppDesignSystem.brandSecondary.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-          ),
-
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo and Title
-                      TweenAnimationBuilder<double>(
-                        duration: const Duration(seconds: 1),
-                        tween: Tween(begin: 0, end: 1),
-                        builder: (context, value, child) {
-                          return Opacity(
-                            opacity: value,
-                            child: Transform.translate(
-                              offset: Offset(0, 20 * (1 - value)),
-                              child: child,
-                            ),
-                          );
-                        },
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: (constraints.maxHeight - AppDesignSystem.s24 * 2)
+                        .clamp(0.0, double.infinity),
+                  ),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: AppDesignSystem.maxContentWidth,
+                      ),
+                      child: Form(
+                        key: _formKey,
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Container(
-                              width: 104,
-                              height: 104,
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                gradient: AppDesignSystem.primaryGradient,
-                                borderRadius: BorderRadius.circular(28),
-                                boxShadow: AppDesignSystem.softShadow(
-                                  AppDesignSystem.brandPrimary,
+                            Center(
+                              child: ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(AppDesignSystem.r16),
+                                child: Image.asset(
+                                  isDark
+                                      ? 'assets/dark_app_icon.png'
+                                      : 'assets/light_app_icon.png',
+                                  width:
+                                      AppDesignSystem.s48 + AppDesignSystem.s24,
+                                  height:
+                                      AppDesignSystem.s48 + AppDesignSystem.s24,
+                                  excludeFromSemantics: true,
                                 ),
                               ),
-                              child: Image.asset(
-                                isDark
-                                    ? 'assets/dark_app_icon.png'
-                                    : 'assets/light_app_icon.png',
-                                fit: BoxFit.contain,
-                              ),
                             ),
-                            // const VSpace.sm(),
-                            // Row(
-                            //   mainAxisAlignment: MainAxisAlignment.center,
-                            //   children: [
-                            //     _buildIconChip('assets/light_app_icon.png'),
-                            //     const HSpace.sm(),
-                            //     _buildIconChip('assets/dark_app_icon.png'),
-                            //   ],
-                            // ),
-                            const VSpace.lg(),
+                            const VSpace.md(),
                             Text(
                               'ECTracker',
+                              textAlign: TextAlign.center,
                               style: theme.textTheme.headlineLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -1,
-                                color: isDark
-                                    ? Colors.white
-                                    : AppDesignSystem.brandPrimary,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            const VSpace.xs(),
+                            const VSpace.sm(),
                             Text(
                               _isLogin
                                   ? 'Sign in to your account'
                                   : 'Create your journey',
+                              textAlign: TextAlign.center,
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.6),
+                                color: secondaryText,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-
-                      const VSpace.xl(),
-
-                      // Form Card
-                      DesignSystemCard(
-                        padding: const EdgeInsets.all(24),
-                        glass: true,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            DesignSystemTextField(
-                              controller: _emailController,
-                              label: 'Email',
-                              hint: 'example@email.com',
-                              icon: Icons.alternate_email_rounded,
-                              keyboardType: TextInputType.emailAddress,
+                            const VSpace.lg(),
+                            DesignSystemCard(
+                              glass: true,
+                              padding: EdgeInsets.zero,
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.all(AppDesignSystem.s20),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    _buildField(
+                                      controller: _emailController,
+                                      label: 'Email',
+                                      hint: 'example@email.com',
+                                      icon: Icons.alternate_email_rounded,
+                                      keyboardType: TextInputType.emailAddress,
+                                    ),
+                                    const VSpace.md(),
+                                    _buildField(
+                                      controller: _passwordController,
+                                      label: 'Password',
+                                      hint: 'Your password',
+                                      icon: Icons.lock_outline_rounded,
+                                      obscureText: _obscurePassword,
+                                      suffixIcon: IconButton(
+                                        tooltip: _obscurePassword
+                                            ? 'Show password'
+                                            : 'Hide password',
+                                        icon: Icon(_obscurePassword
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined),
+                                        onPressed: () => setState(() =>
+                                            _obscurePassword =
+                                                !_obscurePassword),
+                                      ),
+                                    ),
+                                    if (!_isLogin) ...[
+                                      const VSpace.md(),
+                                      _buildField(
+                                        controller: _confirmPasswordController,
+                                        label: 'Confirm Password',
+                                        hint: 'Repeat password',
+                                        icon: Icons.lock_reset_rounded,
+                                        obscureText: _obscureConfirmPassword,
+                                        suffixIcon: IconButton(
+                                          tooltip: _obscureConfirmPassword
+                                              ? 'Show confirm password'
+                                              : 'Hide confirm password',
+                                          icon: Icon(_obscureConfirmPassword
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined),
+                                          onPressed: () => setState(() =>
+                                              _obscureConfirmPassword =
+                                                  !_obscureConfirmPassword),
+                                        ),
+                                      ),
+                                    ],
+                                    if (_isLogin) ...[
+                                      const VSpace.xs(),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton(
+                                          style: TextButton.styleFrom(
+                                            foregroundColor: isDark
+                                                ? AppDesignSystem.authDarkLink
+                                                : theme.colorScheme.primary,
+                                          ),
+                                          onPressed: _handleForgotPassword,
+                                          child: const Text('Forgot Password?'),
+                                        ),
+                                      ),
+                                      const VSpace.sm(),
+                                    ] else
+                                      const VSpace.lg(),
+                                    GradientButton(
+                                      text: _isLogin
+                                          ? 'Sign In'
+                                          : 'Create Account',
+                                      onPressed:
+                                          _isLoading ? null : _handleEmailAuth,
+                                      isLoading: _isLoading,
+                                    ),
+                                    const VSpace.lg(),
+                                    Row(
+                                      children: [
+                                        const Expanded(child: Divider()),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: AppDesignSystem.s12,
+                                          ),
+                                          child: Text(
+                                            'or continue with',
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                              color: secondaryText,
+                                            ),
+                                          ),
+                                        ),
+                                        const Expanded(child: Divider()),
+                                      ],
+                                    ),
+                                    const VSpace.md(),
+                                    OutlinedButton(
+                                      onPressed:
+                                          _isLoading ? null : _handleGoogleAuth,
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size.fromHeight(
+                                          AppDesignSystem.s48 +
+                                              AppDesignSystem.s8,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppDesignSystem.s16,
+                                          vertical: AppDesignSystem.s12,
+                                        ),
+                                        foregroundColor:
+                                            theme.colorScheme.onSurface,
+                                        side: BorderSide(
+                                          color: isDark
+                                              ? AppDesignSystem.darkTextLow
+                                              : AppDesignSystem.textLow,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                              AppDesignSystem.r16),
+                                        ),
+                                        textStyle: theme.textTheme.labelLarge,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          SvgPicture.asset(
+                                            'assets/google_logo.svg',
+                                            width: AppDesignSystem.s24,
+                                            height: AppDesignSystem.s24,
+                                            excludeFromSemantics: true,
+                                          ),
+                                          const HSpace.sm(),
+                                          const Flexible(
+                                            child: Text(
+                                              'Google Account',
+                                              textAlign: TextAlign.center,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                             const VSpace.md(),
-                            DesignSystemTextField(
-                              controller: _passwordController,
-                              label: 'Password',
-                              hint: '••••••••',
-                              icon: Icons.lock_outline_rounded,
-                              obscureText: _obscurePassword,
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_rounded
-                                      : Icons.visibility_off_rounded,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(
-                                    () => _obscurePassword = !_obscurePassword),
-                              ),
-                            ),
-                            if (!_isLogin) ...[
-                              const VSpace.md(),
-                              DesignSystemTextField(
-                                controller: _confirmPasswordController,
-                                label: 'Confirm Password',
-                                hint: '••••••••',
-                                icon: Icons.lock_reset_rounded,
-                                obscureText: _obscureConfirmPassword,
-                                suffixIcon: IconButton(
-                                  icon: Icon(
-                                    _obscureConfirmPassword
-                                        ? Icons.visibility_rounded
-                                        : Icons.visibility_off_rounded,
-                                    size: 20,
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: AppDesignSystem.s4,
+                              children: [
+                                Text(
+                                  _isLogin
+                                      ? "Don't have an account?"
+                                      : 'Already have an account?',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: secondaryText,
                                   ),
-                                  onPressed: () => setState(() =>
-                                      _obscureConfirmPassword =
-                                          !_obscureConfirmPassword),
+                                  textAlign: TextAlign.center,
                                 ),
-                              ),
-                            ],
-                            if (_isLogin)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _handleForgotPassword,
-                                  child: Text(
-                                    'Forgot Password?',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: isDark
+                                        ? AppDesignSystem.authDarkLink
+                                        : theme.colorScheme.primary,
                                   ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _isLogin = !_isLogin;
+                                      _passwordController.clear();
+                                      _confirmPasswordController.clear();
+                                    });
+                                  },
+                                  child: Text(_isLogin ? 'Sign Up' : 'Sign In'),
                                 ),
-                              ),
-                            const VSpace.lg(),
-                            GradientButton(
-                              text: _isLogin ? 'Sign In' : 'Create Account',
-                              onPressed: _isLoading ? null : _handleEmailAuth,
-                              isLoading: _isLoading,
+                              ],
                             ),
                           ],
                         ),
                       ),
-
-                      const VSpace.lg(),
-
-                      // Social Sign In
-                      Row(
-                        children: [
-                          const Expanded(child: Divider()),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: Text(
-                              'OR CONTINUE WITH',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.4),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const Expanded(child: Divider()),
-                        ],
-                      ),
-
-                      const VSpace.lg(),
-
-                      SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: OutlinedButton(
-                          onPressed: _isLoading ? null : _handleGoogleAuth,
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppDesignSystem.r16),
-                            ),
-                            side: BorderSide(
-                              color: theme.colorScheme.outline.withValues(alpha: 0.2),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SvgPicture.asset(
-                                'assets/google_logo.svg',
-                                height: 24,
-                              ),
-                              const HSpace.md(),
-                              const Text(
-                                'Google Account',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const VSpace.xl(),
-
-                      // Toggle
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _isLogin
-                                ? "Don't have an account?"
-                                : "Already have an account?",
-                            style: TextStyle(
-                              color:
-                                  theme.colorScheme.onSurface.withValues(alpha: 0.6),
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _isLogin = !_isLogin;
-                                _passwordController.clear();
-                                _confirmPasswordController.clear();
-                              });
-                            },
-                            child: Text(
-                              _isLogin ? 'Sign Up' : 'Sign In',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    Widget? suffixIcon,
+  }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppDesignSystem.r16),
+      borderSide: BorderSide(
+        color: isDark
+            ? AppDesignSystem.darkTextMed.withValues(alpha: 0.35)
+            : AppDesignSystem.brandPrimary.withValues(alpha: 0.28),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.labelLarge),
+        const VSpace.sm(),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          obscureText: obscureText,
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: theme.textTheme.bodyMedium?.copyWith(
+              color: isDark
+                  ? AppDesignSystem.darkTextMed
+                  : AppDesignSystem.textMed,
+            ),
+            prefixIcon: Icon(icon, size: AppDesignSystem.s20),
+            suffixIcon: suffixIcon,
+            filled: true,
+            fillColor: isDark
+                ? AppDesignSystem.darkCanvas.withValues(alpha: 0.45)
+                : AppDesignSystem.lightCanvas.withValues(alpha: 0.65),
+            border: border,
+            enabledBorder: border,
+            focusedBorder: border.copyWith(
+              borderSide: BorderSide(
+                color: theme.colorScheme.primary,
+                width: 2,
               ),
             ),
+            contentPadding: const EdgeInsets.all(AppDesignSystem.s16),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The broad radial lights add depth beneath the frosted form without hard edges.
+class _AuthBackdrop extends StatelessWidget {
+  const _AuthBackdrop({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: isDark
+                ? AppDesignSystem.authDarkGradient
+                : AppDesignSystem.authLightGradient,
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.topRight,
+              radius: 1.15,
+              colors: [
+                AppDesignSystem.brandPrimary.withValues(
+                  alpha: isDark ? 0.22 : 0.16,
+                ),
+                AppDesignSystem.brandPrimary.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.bottomLeft,
+              radius: 1,
+              colors: [
+                AppDesignSystem.brandSecondary.withValues(
+                  alpha: isDark ? 0.12 : 0.08,
+                ),
+                AppDesignSystem.brandSecondary.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+        child,
+      ],
     );
   }
 }

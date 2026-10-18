@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../utils/app_design_system.dart';
+import 'liquid_glass_card.dart';
 
 const String _rupee = '\u20B9';
 
@@ -130,6 +131,7 @@ class DesignSystemCard extends StatelessWidget {
   final EdgeInsets? margin;
   final VoidCallback? onTap;
   final bool glass;
+  final bool liquidGlass;
 
   const DesignSystemCard({
     super.key,
@@ -137,11 +139,20 @@ class DesignSystemCard extends StatelessWidget {
     this.margin,
     this.onTap,
     this.glass = false,
+    this.liquidGlass = false,
     required this.child,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (liquidGlass) {
+      return LiquidGlassCard(
+        padding: padding,
+        margin: margin,
+        onTap: onTap,
+        child: child,
+      );
+    }
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -268,6 +279,7 @@ class PremiumTransactionTile extends StatelessWidget {
   final DateTime date;
   final bool isIncome;
   final VoidCallback? onTap;
+  final bool liquidGlass;
 
   const PremiumTransactionTile({
     super.key,
@@ -277,12 +289,14 @@ class PremiumTransactionTile extends StatelessWidget {
     required this.date,
     required this.isIncome,
     this.onTap,
+    this.liquidGlass = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DesignSystemCard(
+      liquidGlass: liquidGlass,
       padding: const EdgeInsets.symmetric(
         horizontal: AppDesignSystem.s16,
         vertical: AppDesignSystem.s12,

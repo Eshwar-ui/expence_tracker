@@ -709,3 +709,19 @@ LayoutBuilder(
 ---
 
 *This design system is built with Flutter and follows Material Design 3 principles with custom fintech-inspired enhancements.*
+
+
+## Authentication layout and glass treatment
+
+- Backdrop: `authLightGradient` (pearl/lavender, cool blue, muted mint) and
+  `authDarkGradient` (violet/navy, deep teal). Broad radial brand-color lights
+  fade to transparent beneath the glass; avoid sharp decorative shapes.
+- Surface: existing `DesignSystemCard(glass: true)`, with backdrop blur,
+  translucent fill, highlighted border and soft shadow. Fields use translucent
+  light canvas (65%) or dark canvas (45%), with a visible focus outline.
+- Rhythm: 20px page/card gutters on phones; 16px between fields; 24px between
+  header and form; 16px before the account switch. Content uses the existing
+  500px maximum width. The logo is 72px, without a second enclosing tile.
+- Accessibility: theme text colors, `authDarkLink` for dark-mode links, password
+  toggle tooltips, wrapping account switch, scrollable content when space is
+  limited, and drag-to-dismiss keyboard. Authentication callbacks are unchanged.
