@@ -7,11 +7,16 @@ import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../widgets/sky_background.dart';
 
 const String _rupee = '\u20B9';
 
 class TransactionsScreen extends StatefulWidget {
-  const TransactionsScreen({super.key});
+  const TransactionsScreen(
+      {super.key, this.loadTransactions, this.loadCategories});
+
+  final Future<List<Expense>> Function()? loadTransactions;
+  final Future<List<Category>> Function()? loadCategories;
 
   @override
   State<TransactionsScreen> createState() => _TransactionsScreenState();
@@ -20,8 +25,8 @@ class TransactionsScreen extends StatefulWidget {
 enum _DateRangePreset { all, thisMonth, last30, last90, custom }
 
 class _TransactionsScreenState extends State<TransactionsScreen> {
-  final FirestoreService _firestore = FirestoreService();
-  final CategoryService _categoryService = CategoryService();
+  FirestoreService get _firestore => FirestoreService();
+  CategoryService get _categoryService => CategoryService();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _minAmountController = TextEditingController();
   final TextEditingController _maxAmountController = TextEditingController();
@@ -112,7 +117,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
 
   Future<void> _loadCategories() async {
     try {
-      final categories = await _categoryService.getCategories();
+      final categories = await (widget.loadCategories?.call() ??
+          _categoryService.getCategories());
       if (!mounted) return;
       setState(() {
         _categories = categories;
@@ -131,7 +137,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     });
 
     try {
-      final items = await _firestore.getExpenses();
+      final items = List<Expense>.of(
+          await (widget.loadTransactions?.call() ?? _firestore.getExpenses()));
       if (!mounted) return;
 
       items.sort((a, b) => b.date.compareTo(a.date));
@@ -177,12 +184,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       final matchesCategory =
           _selectedCategory == null || expense.category == _selectedCategory;
 
-      final matchesDate = (window.start == null ||
-              !expense.date.isBefore(window.start!)) &&
-          (window.end == null || !expense.date.isAfter(window.end!));
+      final matchesDate =
+          (window.start == null || !expense.date.isBefore(window.start!)) &&
+              (window.end == null || !expense.date.isAfter(window.end!));
 
-      final matchesAmount =
-          (min == null || expense.amount >= min) &&
+      final matchesAmount = (min == null || expense.amount >= min) &&
           (max == null || expense.amount <= max);
 
       return matchesSearch &&
@@ -226,159 +232,225 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final grouped = _groupTransactions();
-    final months = grouped.keys.toList();
-
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      extendBodyBehindAppBar: true,
       appBar: PremiumAppBar(
         title: 'Transactions',
+        centerTitle: true,
         showBackButton: false,
         actions: [
           IconButton(
-            onPressed: _load,
+            onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
+            tooltip: 'Refresh transactions',
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildSearchAndFilter(theme),
-          _buildSummaryStrip(theme),
-          Expanded(
-            child: _loading
-                ? const DesignSystemLoading()
-                : _loadError != null
-                    ? _buildErrorState()
-                    : _displayTransactions.isEmpty
-                        ? _buildEmptyState()
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDesignSystem.s24,
+      body: Stack(children: [
+        const Positioned.fill(child: SkyBackground()),
+        SafeArea(
+          child: RefreshIndicator(
+            onRefresh: _load,
+            child: CustomScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics()),
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(AppDesignSystem.s24,
+                      AppDesignSystem.s24, AppDesignSystem.s24, 0),
+                  sliver: SliverToBoxAdapter(
+                      child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildSearchAndFilter(theme),
+                      const VSpace.md(),
+                      if (!_loading && _loadError == null) ...[
+                        _buildSummaryStrip(theme),
+                        const VSpace.lg(),
+                        Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: AppDesignSystem.s12,
+                          children: [
+                            Text(
+                                '${_displayTransactions.length} transactions · ${_datePresetLabel()}',
+                                style: theme.textTheme.bodyMedium),
+                            if (_searchQuery.isNotEmpty ||
+                                _activeFilterCount > 0)
+                              TextButton(
+                                  onPressed: _clearAllFilters,
+                                  child: const Text('Clear filters')),
+                          ],
+                        ),
+                      ],
+                    ],
+                  )),
+                ),
+                if (_loading ||
+                    _loadError != null ||
+                    _displayTransactions.isEmpty)
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppDesignSystem.s24),
+                    sliver: SliverToBoxAdapter(
+                        child: DesignSystemCard(
+                      liquidGlass: true,
+                      child: _loading
+                          ? const SizedBox(
+                              height: 180, child: DesignSystemLoading())
+                          : _loadError != null
+                              ? _buildErrorState()
+                              : _buildEmptyState(),
+                    )),
+                  )
+                else
+                  ...grouped.entries.expand((group) => <Widget>[
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppDesignSystem.s24),
+                          sliver: SliverToBoxAdapter(
+                              child: _buildMonthHeader(
+                                  theme, group.key, group.value)),
+                        ),
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppDesignSystem.s24),
+                          sliver: SliverList.builder(
+                            itemCount: group.value.length,
+                            itemBuilder: (context, index) => Padding(
+                              padding: const EdgeInsets.only(
+                                  bottom: AppDesignSystem.s12),
+                              child: _buildTransactionTile(group.value[index]),
                             ),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: months.length,
-                            itemBuilder: (context, index) {
-                              final month = months[index];
-                              final monthItems = grouped[month]!;
-
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildMonthHeader(theme, month, monthItems),
-                                  ...monthItems.map(
-                                    (expense) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: AppDesignSystem.s12,
-                                      ),
-                                      child: PremiumTransactionTile(
-                                        title: expense.title,
-                                        category: expense.category,
-                                        amount: expense.amount,
-                                        date: expense.date,
-                                        isIncome:
-                                            expense.type == TransactionType.income,
-                                        onTap: () => _showTransactionDetails(
-                                          context,
-                                          expense,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                  if (index == months.length - 1)
-                                    const VSpace(120)
-                                  else
-                                    const VSpace.lg(),
-                                ],
-                              );
-                            },
                           ),
+                        ),
+                      ]),
+                const SliverToBoxAdapter(child: SizedBox(height: 200)),
+              ],
+            ),
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          showModalBottomSheet(
+        ),
+      ]),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: AppDesignSystem.s48 * 2),
+        child: FloatingActionButton.extended(
+          onPressed: () => showModalBottomSheet(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
             builder: (context) => ExpenseDialog(onTransactionSaved: _load),
-          );
-        },
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add'),
+          ),
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Add'),
+        ),
       ),
     );
   }
 
-  Widget _buildSearchAndFilter(ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppDesignSystem.s24,
-        AppDesignSystem.s8,
-        AppDesignSystem.s24,
-        AppDesignSystem.s16,
-      ),
-      decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
+  Widget _buildTransactionTile(Expense expense) {
+    final theme = Theme.of(context);
+    final income = expense.type == TransactionType.income;
+    final dark = theme.brightness == Brightness.dark;
+    final color = income
+        ? (dark ? AppDesignSystem.success : AppDesignSystem.incomeTextLight)
+        : (dark ? AppDesignSystem.error : AppDesignSystem.expenseTextLight);
+    return DesignSystemCard(
+      key: ValueKey('transaction-${expense.id}'),
+      liquidGlass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s16),
+      onTap: () => _showTransactionDetails(context, expense),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.all(AppDesignSystem.s8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppDesignSystem.r12),
+            ),
+            child: Icon(
+                income ? Icons.south_west_rounded : Icons.north_east_rounded,
+                size: AppDesignSystem.s20,
+                color: color),
+          ),
+          const HSpace.sm(),
           Expanded(
-            child: DesignSystemTextField(
-              controller: _searchController,
-              label: 'Search',
-              hint: 'Search transactions...',
-              icon: Icons.search_rounded,
-              onChanged: (value) {
-                _searchQuery = value;
-                _applyFilters();
-              },
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close, size: 20),
-                      onPressed: () {
-                        _searchController.clear();
-                        _searchQuery = '';
-                        _applyFilters();
-                      },
-                    )
-                  : null,
-            ),
-          ),
+              child: Text(expense.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium)),
+          const HSpace.sm(),
+          Text(DateFormat('d MMM').format(expense.date),
+              style: theme.textTheme.bodySmall),
+        ]),
+        const VSpace.md(),
+        Row(children: [
+          Expanded(
+              child: Text(expense.category, style: theme.textTheme.bodySmall)),
           const HSpace.md(),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Container(
-              height: 52,
-              width: 52,
-              decoration: BoxDecoration(
-                color: _activeFilterCount > 0
-                    ? theme.colorScheme.primary.withValues(alpha: 0.1)
-                    : theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _activeFilterCount > 0
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.outline.withValues(alpha: 0.2),
-                ),
-              ),
-              child: IconButton(
-                icon: Badge(
-                  isLabelVisible: _activeFilterCount > 0,
-                  label: Text('$_activeFilterCount'),
-                  child: Icon(
-                    Icons.tune_rounded,
-                    color: _activeFilterCount > 0
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface,
-                  ),
-                ),
-                onPressed: () => _showFilterBottomSheet(context),
-              ),
-            ),
+          Expanded(
+              flex: 2,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(
+                    '${income ? '+' : '-'}$_rupee${expense.amount.toStringAsFixed(2)}',
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(color: color, fontWeight: FontWeight.w700)),
+              )),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _buildSearchAndFilter(ThemeData theme) {
+    return DesignSystemCard(
+      liquidGlass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s8),
+      child: Row(children: [
+        Expanded(
+            child: TextField(
+          controller: _searchController,
+          onChanged: (value) {
+            _searchQuery = value;
+            _applyFilters();
+          },
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(color: theme.colorScheme.onSurface),
+          decoration: InputDecoration(
+            hintText: 'Search transactions',
+            hintStyle: theme.textTheme.bodyMedium,
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Clear search',
+                    icon: const Icon(Icons.close_rounded,
+                        size: AppDesignSystem.s20),
+                    onPressed: () {
+                      _searchController.clear();
+                      _searchQuery = '';
+                      _applyFilters();
+                    },
+                  )
+                : null,
+            filled: false,
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: theme.colorScheme.primary)),
+            contentPadding:
+                const EdgeInsets.symmetric(vertical: AppDesignSystem.s16),
           ),
-        ],
-      ),
+        )),
+        IconButton(
+          tooltip: 'Filter transactions',
+          onPressed: () => _showFilterBottomSheet(context),
+          icon: Badge(
+            isLabelVisible: _activeFilterCount > 0,
+            label: Text('$_activeFilterCount'),
+            child: const Icon(Icons.tune_rounded),
+          ),
+        ),
+      ]),
     );
   }
 
@@ -390,52 +462,27 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         .where((expense) => expense.type == TransactionType.expense)
         .fold<double>(0, (sum, expense) => sum + expense.amount);
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppDesignSystem.s24,
-        0,
-        AppDesignSystem.s24,
-        AppDesignSystem.s16,
-      ),
-      // IntrinsicHeight + stretch makes the three cards take the height of
-      // the tallest one, even if helper lines wrap differently.
-      child: IntrinsicHeight(
+    return IntrinsicHeight(
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _buildSummaryCard(
-                theme: theme,
-                title: 'Showing',
-                value: _displayTransactions.length.toString(),
-                helper: _activeFilterCount == 0 ? 'All transactions' : 'Filtered',
-                color: AppDesignSystem.brandPrimary,
-              ),
-            ),
-            const HSpace.md(),
-            Expanded(
-              child: _buildSummaryCard(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+            child: _buildSummaryCard(
                 theme: theme,
                 title: 'Income',
                 value: '$_rupee${income.toStringAsFixed(0)}',
                 helper: 'Visible results',
-                color: AppDesignSystem.success,
-              ),
-            ),
-            const HSpace.md(),
-            Expanded(
-              child: _buildSummaryCard(
+                color: AppDesignSystem.success)),
+        const HSpace.md(),
+        Expanded(
+            child: _buildSummaryCard(
                 theme: theme,
                 title: 'Spent',
                 value: '$_rupee${expenses.toStringAsFixed(0)}',
                 helper: 'Visible results',
-                color: AppDesignSystem.error,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+                color: AppDesignSystem.error)),
+      ],
+    ));
   }
 
   Widget _buildSummaryCard({
@@ -445,22 +492,29 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     required String helper,
     required Color color,
   }) {
+    final amountColor = theme.brightness == Brightness.dark
+        ? color
+        : color == AppDesignSystem.success
+            ? AppDesignSystem.incomeTextLight
+            : color == AppDesignSystem.error
+                ? AppDesignSystem.expenseTextLight
+                : color;
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: const EdgeInsets.all(AppDesignSystem.s16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(title, style: theme.textTheme.bodySmall),
           const VSpace.xs(),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(value,
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: amountColor,
+                  fontWeight: FontWeight.w700,
+                )),
           ),
           const VSpace.xs(),
           Text(helper, style: theme.textTheme.bodySmall),
@@ -476,13 +530,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       context: context,
       firstDate: DateTime(2020),
       lastDate: now,
-      initialDateRange:
-          _customRangeStart != null && _customRangeEnd != null
-              ? DateTimeRange(start: _customRangeStart!, end: _customRangeEnd!)
-              : DateTimeRange(
-                  start: DateTime(now.year, now.month, 1),
-                  end: now,
-                ),
+      initialDateRange: _customRangeStart != null && _customRangeEnd != null
+          ? DateTimeRange(start: _customRangeStart!, end: _customRangeEnd!)
+          : DateTimeRange(
+              start: DateTime(now.year, now.month, 1),
+              end: now,
+            ),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context)
@@ -523,7 +576,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                 top: MediaQuery.of(context).padding.top + kToolbarHeight,
               ),
               child: DesignSystemCard(
-                glass: true,
+                liquidGlass: true,
                 padding: EdgeInsets.fromLTRB(
                   AppDesignSystem.s24,
                   AppDesignSystem.s24,
@@ -550,10 +603,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Filter Transactions',
+                          Expanded(
+                              child: Text(
+                            'Filter transactions',
                             style: theme.textTheme.titleLarge,
-                          ),
+                          )),
                           TextButton(
                             onPressed: () {
                               _clearAllFilters();
@@ -566,20 +620,19 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                       const VSpace.lg(),
                       const _FilterSectionLabel('Transaction Type'),
                       const VSpace.sm(),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: 'All', label: Text('All')),
-                          ButtonSegment(value: 'Income', label: Text('Income')),
-                          ButtonSegment(
-                              value: 'Expense', label: Text('Expense')),
-                        ],
-                        selected: {_activeFilter},
-                        onSelectionChanged: (selection) {
-                          setModalState(() {
-                            _activeFilter = selection.first;
-                          });
-                          _applyFilters();
-                        },
+                      Wrap(
+                        spacing: AppDesignSystem.s8,
+                        runSpacing: AppDesignSystem.s8,
+                        children: ['All', 'Income', 'Expense']
+                            .map((type) => _DatePresetChip(
+                                  label: type,
+                                  selected: _activeFilter == type,
+                                  onTap: () {
+                                    setModalState(() => _activeFilter = type);
+                                    _applyFilters();
+                                  },
+                                ))
+                            .toList(),
                       ),
                       const VSpace.lg(),
                       const _FilterSectionLabel('Date Range'),
@@ -592,15 +645,14 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             label: 'All Time',
                             selected: _datePreset == _DateRangePreset.all,
                             onTap: () {
-                              setModalState(() =>
-                                  _datePreset = _DateRangePreset.all);
+                              setModalState(
+                                  () => _datePreset = _DateRangePreset.all);
                               _applyFilters();
                             },
                           ),
                           _DatePresetChip(
                             label: 'This Month',
-                            selected:
-                                _datePreset == _DateRangePreset.thisMonth,
+                            selected: _datePreset == _DateRangePreset.thisMonth,
                             onTap: () {
                               setModalState(() =>
                                   _datePreset = _DateRangePreset.thisMonth);
@@ -611,8 +663,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             label: 'Last 30 Days',
                             selected: _datePreset == _DateRangePreset.last30,
                             onTap: () {
-                              setModalState(() =>
-                                  _datePreset = _DateRangePreset.last30);
+                              setModalState(
+                                  () => _datePreset = _DateRangePreset.last30);
                               _applyFilters();
                             },
                           ),
@@ -620,8 +672,8 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                             label: 'Last 90 Days',
                             selected: _datePreset == _DateRangePreset.last90,
                             onTap: () {
-                              setModalState(() =>
-                                  _datePreset = _DateRangePreset.last90);
+                              setModalState(
+                                  () => _datePreset = _DateRangePreset.last90);
                               _applyFilters();
                             },
                           ),
@@ -691,8 +743,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                           child: DropdownButton<String?>(
                             value: _selectedCategory,
                             isExpanded: true,
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
                             items: [
                               const DropdownMenuItem(
                                 value: null,
@@ -709,7 +760,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                                         color: theme.colorScheme.primary,
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(category.name),
+                                      Expanded(child: Text(category.name)),
                                     ],
                                   ),
                                 ),
@@ -756,33 +807,26 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Row(
-              children: [
-                Text(
-                  month.split(' ').first,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const HSpace.sm(),
-                Text(
-                  month.split(' ').last,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
+              child: Semantics(
+            header: true,
+            child: Text(month,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0,
+                  color: theme.colorScheme.onSurfaceVariant,
+                )),
+          )),
+          const HSpace.sm(),
+          Flexible(
+              child: Text(
             '${monthTotal >= 0 ? '+' : '-'}$_rupee${monthTotal.abs().toStringAsFixed(0)}',
-            style: theme.textTheme.bodyMedium?.copyWith(
+            style: theme.textTheme.bodySmall?.copyWith(
               color: monthTotal >= 0
                   ? AppDesignSystem.success
                   : AppDesignSystem.error,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w500,
             ),
-          ),
+          )),
         ],
       ),
     );
@@ -804,8 +848,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   }
 
   Widget _buildEmptyState() {
-    final hasFilters =
-        _searchQuery.isNotEmpty || _activeFilterCount > 0;
+    final hasFilters = _searchQuery.isNotEmpty || _activeFilterCount > 0;
 
     return DesignSystemEmptyState(
       icon: Icons.receipt_long_rounded,
@@ -831,9 +874,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => DesignSystemCard(
-        glass: true,
+        liquidGlass: true,
         padding: const EdgeInsets.all(AppDesignSystem.s24),
-        child: Column(
+        child: SingleChildScrollView(
+            child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -936,7 +980,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             ),
             const SizedBox(height: 120),
           ],
-        ),
+        )),
       ),
     );
   }
@@ -956,7 +1000,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           Text(
@@ -1006,7 +1050,7 @@ class _FilterSectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w800,
         letterSpacing: 0.8,
         fontSize: 10,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+        color: theme.colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -1028,55 +1072,20 @@ class _DatePresetChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final tint = AppDesignSystem.brandPrimary;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
+    return ChoiceChip(
+      label: Text(label),
+      avatar: icon == null ? null : Icon(icon, size: AppDesignSystem.s16),
+      selected: selected,
+      showCheckmark: false,
+      onSelected: (_) => onTap(),
+      selectedColor: theme.colorScheme.primary.withValues(alpha: 0.16),
+      backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.30),
+      labelStyle: theme.textTheme.labelLarge
+          ?.copyWith(color: theme.colorScheme.onSurface),
+      side: BorderSide(
           color: selected
-              ? tint.withValues(alpha: 0.12)
-              : isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.025),
-          borderRadius: BorderRadius.circular(AppDesignSystem.rFull),
-          border: Border.all(
-            color: selected
-                ? tint.withValues(alpha: 0.45)
-                : isDark
-                    ? Colors.white.withValues(alpha: 0.06)
-                    : Colors.black.withValues(alpha: 0.05),
-            width: selected ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (icon != null) ...[
-              Icon(
-                icon,
-                size: 14,
-                color: selected
-                    ? tint
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.6),
-              ),
-              const SizedBox(width: 6),
-            ],
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected
-                    ? tint
-                    : theme.colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ),
-      ),
+              ? theme.colorScheme.primary
+              : theme.colorScheme.onSurface.withValues(alpha: 0.16)),
     );
   }
 }
@@ -1116,11 +1125,11 @@ class _AmountField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+            color: theme.textTheme.bodyMedium?.color,
           ),
           prefixText: '$_rupee ',
           prefixStyle: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+            color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
           border: InputBorder.none,

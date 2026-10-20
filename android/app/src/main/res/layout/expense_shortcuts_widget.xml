@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@drawable/widget_quick_expense_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/widget_add"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:padding="8dp"
+            android:text="@string/widget_add_expense"
+            android:textSize="16sp"
+            android:fontFamily="sans-serif-medium"
+            android:textColor="@color/expense_widget_on_primary"
+            android:background="@drawable/widget_expense_primary_bg"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/widget_voice"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/widget_voice_short"
+            android:contentDescription="@string/widget_voice_expense"
+            android:textSize="14sp"
+            android:fontFamily="sans-serif"
+            android:textColor="@color/expense_widget_on_surface" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <TextView
+            android:id="@+id/widget_food"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/widget_food"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif"
+            android:textColor="@color/expense_widget_on_surface"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/widget_travel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/widget_travel"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif"
+            android:textColor="@color/expense_widget_on_surface"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/widget_shopping"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:text="@string/widget_shopping"
+            android:textSize="13sp"
+            android:fontFamily="sans-serif"
+            android:textColor="@color/expense_widget_on_surface" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/quick_expense_root" android:layout_width="match_parent"
+    android:layout_height="match_parent" android:orientation="vertical"
+    android:gravity="center" android:padding="8dp" android:background="@drawable/widget_quick_expense_bg"
+    android:contentDescription="@string/widget_add_expense" android:focusable="true">
+    <ImageView android:layout_width="36dp" android:layout_height="36dp"
+        android:src="@drawable/widget_dot_plus" android:layout_marginBottom="8dp"
+        android:importantForAccessibility="no" android:contentDescription="@null" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/widget_add_expense" android:textSize="12sp" android:textColor="@color/expense_widget_on_surface"
+        android:gravity="center" android:maxLines="2" android:fontFamily="sans-serif-medium" />
+</LinearLayout>

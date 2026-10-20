@@ -58,7 +58,7 @@ class PendingNotificationService {
     _initialized = true;
 
     const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('ic_notification'),
     );
     await _plugin.initialize(
       initSettings,
@@ -116,7 +116,7 @@ class PendingNotificationService {
         importance: Importance.high,
         priority: Priority.high,
         category: AndroidNotificationCategory.recommendation,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_notification',
         actions: [
           AndroidNotificationAction(
             PendingNotificationAction.confirm,

@@ -2,6 +2,8 @@ package com.eshwar.expensetracker
 
 import android.app.Notification
 import android.content.Context
+import android.content.ComponentName
+import android.os.Build
 import android.content.Intent
 import android.content.SharedPreferences
 import android.service.notification.NotificationListenerService
@@ -12,6 +14,7 @@ class NotificationCaptureService : NotificationListenerService() {
 
     override fun onCreate() {
         super.onCreate()
+        NotificationChannelBridge.initialize(this)
         Log.i(TAG, "Notification listener created")
     }
 
@@ -28,6 +31,9 @@ class NotificationCaptureService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         Log.w(TAG, "Notification listener disconnected")
         super.onListenerDisconnected()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            requestRebind(ComponentName(this, NotificationCaptureService::class.java))
+        }
     }
 
     override fun onBind(intent: Intent?): android.os.IBinder? {
@@ -64,10 +70,7 @@ class NotificationCaptureService : NotificationListenerService() {
             return
         }
 
-        Log.i(
-            TAG,
-            "Captured notification package=$packageName title=\"$title\" text=\"$text\" timestamp=$timestamp"
-        )
+        Log.i(TAG, "Captured notification package=$packageName timestamp=$timestamp")
 
         // Persist and forward the raw payload to Flutter on a background thread.
         NotificationChannelBridge.enqueueNotification(packageName, title, text, timestamp)

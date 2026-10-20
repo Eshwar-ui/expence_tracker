@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="580" viewBox="220 160 620 580" fill="none">
+<title>ECTracker purple wallet logo</title>
+<defs>
+<linearGradient id="back" x1="270" y1="300" x2="570" y2="700" gradientUnits="userSpaceOnUse"><stop stop-color="#A29BFF"/><stop offset=".35" stop-color="#5140DB"/><stop offset="1" stop-color="#21105D"/></linearGradient>
+<linearGradient id="handle" x1="500" y1="279" x2="500" y2="359" gradientUnits="userSpaceOnUse"><stop stop-color="#DCD8FF"/><stop offset=".18" stop-color="#8B83FF"/><stop offset=".55" stop-color="#5447E9"/><stop offset="1" stop-color="#21146C"/></linearGradient>
+<linearGradient id="paper" x1="402" y1="221" x2="498" y2="339" gradientUnits="userSpaceOnUse"><stop stop-color="#F7F5FF"/><stop offset=".5" stop-color="#CFCCE8"/><stop offset="1" stop-color="#8B87C3"/></linearGradient>
+<linearGradient id="card" x1="528" y1="201" x2="603" y2="339" gradientUnits="userSpaceOnUse"><stop stop-color="#D89EFF"/><stop offset=".42" stop-color="#B17CEA"/><stop offset="1" stop-color="#7350C4"/></linearGradient>
+<linearGradient id="face" x1="502" y1="351" x2="559" y2="691" gradientUnits="userSpaceOnUse"><stop stop-color="#9790FF"/><stop offset=".35" stop-color="#7F77F5"/><stop offset="1" stop-color="#5547C8"/></linearGradient>
+<linearGradient id="edge" x1="520" y1="350" x2="520" y2="692" gradientUnits="userSpaceOnUse"><stop stop-color="#F4EDFF"/><stop offset=".22" stop-color="#AAA1FF"/><stop offset="1" stop-color="#3C2A9D"/></linearGradient>
+<linearGradient id="check" x1="450" y1="430" x2="510" y2="573" gradientUnits="userSpaceOnUse"><stop stop-color="#D7A1FF"/><stop offset=".36" stop-color="#B479EE"/><stop offset="1" stop-color="#8D56D0"/></linearGradient>
+<linearGradient id="strap" x1="707" y1="449" x2="737" y2="564" gradientUnits="userSpaceOnUse"><stop stop-color="#B9AEFF"/><stop offset=".2" stop-color="#8F82F8"/><stop offset="1" stop-color="#5140C8"/></linearGradient>
+<linearGradient id="button" x1="672" y1="482" x2="701" y2="534" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF"/><stop offset=".5" stop-color="#E9E9F4"/><stop offset="1" stop-color="#B6B6CE"/></linearGradient>
+</defs>
+<!-- Wallet back and raised top rim -->
+<path d="M366 277H657C701 277 724 300 735 336H702C694 314 677 302 652 302H363C345 302 332 312 332 327C332 342 343 350 360 350H712C741 350 764 370 764 401V605C764 654 731 690 682 690H356C300 690 266 654 266 601V366C266 316 310 277 366 277Z" fill="url(#back)"/>
+<path d="M367 279H657C694 279 720 302 731 335H706C697 310 679 299 651 299H364C344 299 331 310 331 327C331 344 343 352 361 352" stroke="url(#handle)" stroke-width="7"/>
+<!-- Cards remain behind the front face -->
+<path d="M392 335V238C392 224 403 216 418 216H546V335Z" fill="#7164AC"/>
+<path d="M398 332V237C398 224 408 218 421 218H546V332Z" fill="url(#paper)" stroke="#EAE5FF" stroke-width="3"/>
+<path d="M469 335L507 220C512 200 525 194 542 199L640 231C657 236 663 246 658 262L635 335Z" fill="#5F399F"/>
+<path d="M477 332L513 218C518 201 530 195 546 201L640 233C655 238 662 248 657 264L634 332Z" fill="url(#card)" stroke="#DDADFF" stroke-width="3"/>
+<!-- Beveled wallet front -->
+<path d="M295 355C295 349 301 346 307 347C325 351 341 354 360 354H729C749 354 763 368 763 390V435L706 438C657 438 624 465 624 506C624 549 655 578 704 578H763V607C763 655 732 689 684 689H372C324 689 295 658 295 610Z" fill="url(#face)" stroke="url(#edge)" stroke-width="4"/>
+<path d="M307 355C326 358 342 359 362 359H728C744 359 756 371 758 388" stroke="#E9E2FF" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+<!-- Recessed checkmark with a raised purple center -->
+<path d="M395 485L461 551L580 423" stroke="#372080" stroke-width="89" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M395 485L461 551L580 423" stroke="#1D0D5E" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M395 487L461 551L580 423" stroke="url(#check)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M377 477C386 459 398 455 412 467L462 510L561 408C572 398 585 399 594 408" stroke="#F0CAFF" stroke-opacity=".85" stroke-width="3" stroke-linecap="round"/>
+<path d="M351 503C352 516 359 528 370 540L427 593C445 608 466 608 484 592L606 459" stroke="#B7A3FF" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+<!-- Raised closure and silver button -->
+<path d="M705 449L770 441C784 439 792 446 792 461V530C792 548 782 557 763 562L707 568C662 572 635 549 635 513C635 476 660 453 705 449Z" fill="#332083"/>
+<path d="M707 455L770 446C785 444 792 451 792 466V530C792 547 782 555 764 558L708 563C667 566 642 548 642 513C642 480 665 459 707 455Z" fill="url(#strap)"/>
+<path d="M648 497C654 473 674 460 707 459L770 450C777 449 784 451 786 454" stroke="#E7DFFF" stroke-opacity=".85" stroke-width="3" stroke-linecap="round"/>
+<circle cx="687" cy="512" r="29" fill="#463291"/>
+<circle cx="686" cy="508" r="26" fill="url(#button)" stroke="#CBC5F3" stroke-width="2"/>
+<path d="M669 499C676 486 690 484 701 495" stroke="#FFF" stroke-width="3" stroke-linecap="round"/>
+</svg>

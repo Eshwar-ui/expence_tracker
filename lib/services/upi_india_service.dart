@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_upi_india/flutter_upi_india.dart';
+import '../utils/upi_payment_helper.dart';
 import '../widgets/design_system_components.dart';
 
 /// UPI India Service for payment integration with app selection and status tracking
@@ -33,15 +36,34 @@ import '../widgets/design_system_components.dart';
 /// }
 /// ```
 class UpiIndiaService {
+  static const _paymentChannel =
+      MethodChannel('com.eshwar.expensetracker/upi_payment');
+
   /// Fetches all installed UPI apps on the device
   /// Returns a list of ApplicationMeta objects representing available UPI apps
   static Future<List<ApplicationMeta>> getInstalledUpiApps() async {
     try {
+      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+        final apps = await _paymentChannel
+                .invokeListMethod<dynamic>('getInstalledApps') ??
+            [];
+        return apps.map((item) {
+          final data = Map<String, dynamic>.from(item as Map);
+          return ApplicationMeta.android(
+            UpiApplication(
+                androidPackageName: data['packageName'] as String,
+                appName: data['appName'] as String),
+            data['icon'] as Uint8List,
+            0,
+            0,
+          );
+        }).toList();
+      }
       debugPrint('🔍 Attempting to fetch installed UPI apps...');
       debugPrint('📦 Using flutter_upi_india package');
       debugPrint('🔧 Calling: UpiPay.getInstalledUpiApplications()');
 
-      // Use static method from flutter_upi_india package
+      // iOS discovery continues to use the plugin.
       final apps = await UpiPay.getInstalledUpiApplications();
 
       debugPrint('📱 Found ${apps.length} installed UPI apps');
@@ -79,6 +101,12 @@ class UpiIndiaService {
       }
 
       return apps;
+    } on MissingPluginException {
+      throw PlatformException(
+        code: 'APP_UPDATE_REQUIRED',
+        message:
+            'Payment app detection needs the updated Android app. Rebuild and reinstall the app; hot reload cannot update this feature.',
+      );
     } catch (e, stackTrace) {
       debugPrint('❌ Error fetching UPI apps: $e');
       debugPrint('📚 Stack trace: $stackTrace');
@@ -88,8 +116,8 @@ class UpiIndiaService {
       debugPrint('   - Verify package names are correct');
       debugPrint('   - Completely uninstall and reinstall app');
       debugPrint('   - Check if method name is correct');
-      // Return empty list if method doesn't exist
-      return [];
+      // A detection failure does not mean that no payment apps are installed.
+      Error.throwWithStackTrace(e, stackTrace);
     }
   }
 
@@ -202,7 +230,9 @@ class UpiIndiaService {
       if (context.mounted) {
         showDesignSystemSnackBar(
           context: context,
-          message: 'Error loading UPI apps: $e',
+          message: e is PlatformException
+              ? (e.message ?? 'Could not check payment apps. Try again.')
+              : 'Could not check payment apps. Try again or pay directly in your payment app.',
           isError: true,
         );
       }
@@ -212,46 +242,12 @@ class UpiIndiaService {
 
   /// Helper to get app display name from ApplicationMeta
   static String _getAppDisplayName(ApplicationMeta app) {
-    try {
-      // Try to get app name - check common property names
-      // The actual property name may vary, so we try multiple approaches
-      final appString = app.toString();
-      // Extract name from toString() representation
-      if (appString.contains('(')) {
-        return appString.split('(').first.trim();
-      }
-      return appString;
-    } catch (e) {
-      return 'UPI App';
-    }
+    return app.upiApplication.appName;
   }
 
   /// Helper to extract UpiApplication from ApplicationMeta
   static UpiApplication _getUpiApplicationFromMeta(ApplicationMeta app) {
-    try {
-      // Try to access the application property directly
-      // If that doesn't work, try to determine from app name
-      final appName = _getAppDisplayName(app).toLowerCase();
-
-      if (appName.contains('google') || appName.contains('gpay')) {
-        return UpiApplication.googlePay;
-      } else if (appName.contains('phonepe')) {
-        return UpiApplication.phonePe;
-      } else if (appName.contains('paytm')) {
-        return UpiApplication.paytm;
-      } else if (appName.contains('bhim')) {
-        return UpiApplication.bhim;
-      } else if (appName.contains('amazon')) {
-        return UpiApplication.amazonPay;
-      } else {
-        // Default fallback
-        return UpiApplication.googlePay;
-      }
-    } catch (e) {
-      debugPrint('⚠️ Error extracting UpiApplication: $e');
-      // Default fallback
-      return UpiApplication.googlePay;
-    }
+    return app.upiApplication;
   }
 
   /// Initiates a UPI payment transaction
@@ -272,7 +268,34 @@ class UpiIndiaService {
     required String receiverName,
     String? transactionNote,
     String? transactionRef,
+    String? originalUpiUri,
   }) async {
+    final parsedAmount = double.tryParse(amount);
+    if (parsedAmount == null || !UPIPaymentHelper.isValidAmount(parsedAmount)) {
+      throw ArgumentError(
+          'Enter a valid amount with up to two decimal places.');
+    }
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      final uri = originalUpiUri != null
+          ? UPIPaymentHelper.updateUpiAmount(originalUpiUri, parsedAmount,
+              note: transactionNote)
+          : UPIPaymentHelper.buildUpiUri(
+              upiId: receiverUpiAddress,
+              name: receiverName,
+              amount: parsedAmount,
+              note: transactionNote ?? '');
+      final raw = await _paymentChannel.invokeMethod<String>('pay', {
+        'uri': uri,
+        'packageName': app.upiApplication.androidPackageName,
+      });
+      if (raw == null || raw.trim().isEmpty) {
+        throw PlatformException(
+            code: 'UNCONFIRMED',
+            message:
+                'No confirmation returned. Check your payment app or bank before trying again.');
+      }
+      return parseAndroidResponse(raw);
+    }
     // Generate unique transaction reference if not provided
     final txnRef =
         transactionRef ?? 'TXN${DateTime.now().millisecondsSinceEpoch}';
@@ -288,9 +311,7 @@ class UpiIndiaService {
     debugPrint('═══════════════════════════════════════════');
 
     try {
-      // Initiate UPI transaction using static method from flutter_upi_india
-      // Need to extract the UpiApplication enum from ApplicationMeta
-      // ApplicationMeta should have a property to get the UpiApplication
+      // Non-Android fallback uses the selected application directly.
       final upiApp = _getUpiApplicationFromMeta(app);
 
       final response = await UpiPay.initiateTransaction(
@@ -322,6 +343,40 @@ class UpiIndiaService {
       // Re-throw to let caller handle
       rethrow;
     }
+  }
+
+  /// Opens the payment app's home screen; this never establishes payment status.
+  static Future<void> openPaymentApp(ApplicationMeta app) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      throw UnsupportedError('Opening payment apps directly requires Android.');
+    }
+    await _paymentChannel.invokeMethod<void>('openApp', {
+      'packageName': app.upiApplication.androidPackageName,
+    });
+  }
+
+  /// Missing, unknown or contradictory responses cannot establish success.
+  @visibleForTesting
+  static UpiTransactionResponse parseAndroidResponse(String raw) {
+    final fields = Uri.splitQueryString(raw)
+        .map((key, value) => MapEntry(key.toLowerCase(), value));
+    final status = fields['status']?.trim().toLowerCase();
+    if (!['success', 's', 'submitted', 'failure', 'failed'].contains(status)) {
+      throw PlatformException(
+          code: 'UNCONFIRMED',
+          message:
+              'The payment app did not return a clear result. Check your payment app or bank before trying again.');
+    }
+    if ((status == 'success' || status == 's') &&
+        fields['responsecode']?.isNotEmpty == true &&
+        fields['responsecode'] != '00') {
+      throw PlatformException(
+          code: 'UNCONFIRMED',
+          message:
+              'The payment result could not be confirmed. Check your payment app or bank before trying again.');
+    }
+    return UpiTransactionResponse.android(
+        fields.entries.map((entry) => '${entry.key}=${entry.value}').join('&'));
   }
 
   /// Handles UPI payment response and shows appropriate UI feedback
@@ -419,7 +474,8 @@ class UpiIndiaService {
             Text('Payment Failed'),
           ],
         ),
-        content: Text('Payment could not be completed.\n\nError: $error'),
+        content: Text(
+            'The payment app reported a failure.\n\nCode: $error\n\nIf it rejects this handoff, scan the original QR directly in your payment app. Bank SMS or payment alerts can still track the expense.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

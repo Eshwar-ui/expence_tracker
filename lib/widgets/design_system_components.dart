@@ -295,6 +295,10 @@ class PremiumTransactionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final amountColor = isIncome
+        ? (dark ? AppDesignSystem.success : AppDesignSystem.incomeTextLight)
+        : (dark ? AppDesignSystem.error : AppDesignSystem.expenseTextLight);
     return DesignSystemCard(
       liquidGlass: liquidGlass,
       padding: const EdgeInsets.symmetric(
@@ -344,9 +348,7 @@ class PremiumTransactionTile extends StatelessWidget {
               Text(
                 '${isIncome ? "+" : "-"}$_rupee${amount.toStringAsFixed(2)}',
                 style: theme.textTheme.titleMedium?.copyWith(
-                  color: isIncome
-                      ? AppDesignSystem.success
-                      : AppDesignSystem.error,
+                  color: amountColor,
                   fontWeight: FontWeight.w700,
                 ),
               ),

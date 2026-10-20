@@ -72,20 +72,25 @@ class SMSService {
       return null;
     }
 
-    final amount = TransactionParser.extractAmount(body);
-
-    if (amount == null) return null;
+    final parsed = NotificationParsing.parse(body);
+    final amount = parsed.amount;
+    if (amount == null ||
+        parsed.transactionType == null ||
+        parsed.confidence < NotificationValidation.defaultMinConfidence) {
+      return null;
+    }
 
     return TransactionSMS(
       id: 'sms_${message.date}_$sender',
       bankName: TransactionParser.extractBankName(sender, body),
       accountNumber: _extractAccountNumber(body),
-      transactionType: TransactionParser.extractTransactionType(body),
+      transactionType: parsed.transactionType!,
       amount: amount,
       date: message.date != null
           ? DateTime.fromMillisecondsSinceEpoch(message.date!)
           : DateTime.now(),
-      description: TransactionParser.extractDescription(body),
+      description:
+          parsed.merchant ?? TransactionParser.extractDescription(body),
       balance: _extractBalance(body),
       originalMessage: body,
       sender: sender,

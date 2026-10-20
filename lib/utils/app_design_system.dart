@@ -44,8 +44,10 @@ class AppDesignSystem {
 
   // Text Colors
   static const Color textHigh = Color(0xFF1E293B);
-  static const Color textMed = Color(0xFF64748B);
+  static const Color textMed = Color(0xFF475569);
   static const Color textLow = Color(0xFF94A3B8);
+  static const Color incomeTextLight = Color(0xFF065F46);
+  static const Color expenseTextLight = Color(0xFFB91C1C);
 
   static const Color darkTextHigh = Color(0xFFF8FAFC);
   static const Color darkTextMed = Color(0xFFCBD5E1);
@@ -163,6 +165,26 @@ class AppDesignSystem {
         fontWeight: FontWeight.w400,
         color: subColor,
       ),
+      titleSmall: GoogleFonts.plusJakartaSans(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: color,
+      ),
+      bodySmall: GoogleFonts.plusJakartaSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: subColor,
+      ),
+      labelMedium: GoogleFonts.plusJakartaSans(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        color: subColor,
+      ),
+      labelSmall: GoogleFonts.plusJakartaSans(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: subColor,
+      ),
       labelLarge: GoogleFonts.plusJakartaSans(
         fontSize: 14,
         fontWeight: FontWeight.w600,
@@ -236,6 +258,7 @@ class AppDesignSystem {
         onError: Colors.white,
         surface: canvas,
         onSurface: isDark ? darkTextHigh : textHigh,
+        onSurfaceVariant: isDark ? darkTextMed : textMed,
         outline: isDark ? darkBorder : lightBorder,
       ),
       scaffoldBackgroundColor: background,

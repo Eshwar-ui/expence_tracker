@@ -1,3 +1,5 @@
+import 'transaction_parser.dart';
+
 class ParsingResult {
   final double? amount;
   final String? transactionType; // 'debit' | 'credit'
@@ -56,11 +58,8 @@ class RejectionRules {
     caseSensitive: false,
   );
 
-  // Common DLT promotional/service header prefixes used by Indian carriers
-  // for marketing SMS. Transactional SMS use TX-/JX-/JK- typically, while
-  // promotional use AD-/VM-/VK-/AX-/TM-/BP-/BZ-/DM-/DZ- etc.
-  static final RegExp _promoHeader = RegExp(
-    r'^(AD|VM|VK|AX|TM|BP|BZ|DM|DZ|PM|PR)[-\s][A-Z0-9]{2,}',
+  static final RegExp _incompletePayment = RegExp(
+    r'\b(failed|declined|unsuccessful|pending|processing|requested|request\s+(?:for|of)|payment\s+request|collect\s+request|scheduled)\b',
     caseSensitive: false,
   );
 
@@ -76,6 +75,7 @@ class RejectionRules {
     if (_otp.hasMatch(combined) || _codeShape.hasMatch(combined)) {
       return 'otp';
     }
+    if (_incompletePayment.hasMatch(combined)) return 'incomplete_payment';
     if (_cartReminder.hasMatch(combined)) return 'cart_reminder';
     if (_promo.hasMatch(combined)) return 'promo';
     // Balance-only message: only reject if there's no debit/credit keyword,
@@ -85,9 +85,6 @@ class RejectionRules {
                 caseSensitive: false)
             .hasMatch(combined)) {
       return 'balance_only';
-    }
-    if (sender != null && _promoHeader.hasMatch(sender)) {
-      return 'promo_sender';
     }
     return null;
   }
@@ -124,23 +121,23 @@ class NotificationParsing {
 
   static final List<RegExp> _amountPatterns = [
     RegExp(
-      r'(?:rs\.?:?|inr[:.]?|\u20b9)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      r'(?:rs\.?:?|inr[:.]?|\u20b9)\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)',
       caseSensitive: false,
     ),
     RegExp(
-      r'([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20b9)',
+      r'([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)\s*(?:rs\.?|inr|\u20b9)',
       caseSensitive: false,
     ),
     RegExp(
-      r'\b(?:amount|amt)\s*(?:of|is|:)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      r'\b(?:amount|amt)\s*(?:of|is|:)?\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)',
       caseSensitive: false,
     ),
     RegExp(
-      r'\b(?:debited|credited|spent|paid|payment|purchase|withdrawn|received|charged|deducted)\s*(?:for|of|by)?\s*(?:rs\.?:?|inr[:.]?|\u20b9)?\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      r'\b(?:debited|credited|spent|paid|payment|purchase|withdrawn|received|charged|deducted)\s*(?:for|of|by)?\s*(?:rs\.?:?|inr[:.]?|\u20b9)?\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)',
       caseSensitive: false,
     ),
     RegExp(
-      r'\b(?:dr|cr)\s*([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?)',
+      r'\b(?:dr|cr)\s*([0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?)',
       caseSensitive: false,
     ),
   ];
@@ -158,7 +155,8 @@ class NotificationParsing {
   ];
 
   static ParsingResult parse(String text, {String? title}) {
-    final combined = _normalize('$title $text');
+    final combined =
+        _normalize(TransactionParser.normalizeText('${title ?? ''} $text'));
 
     final amountInfo = _extractAmount(combined);
     final amount = amountInfo.amount;
@@ -203,6 +201,13 @@ class NotificationParsing {
   }
 
   static _AmountResult _extractAmount(String text) {
+    // A balance can appear before the payment amount in bank templates.
+    text = text.replaceAll(
+      RegExp(
+          r'\b(?:avl\.?\s*bal(?:ance)?|available\s+bal(?:ance)?|balance|bal)\s*[:.-]?\s*(?:rs\.?:?|inr[:.]?|₹)\s*[0-9]+(?:,[0-9]{2,3})*(?:\.[0-9]{1,2})?',
+          caseSensitive: false),
+      '',
+    );
     for (final pattern in _amountPatterns) {
       final match = pattern.firstMatch(text);
       if (match != null) {
@@ -228,8 +233,10 @@ class NotificationParsing {
   static String? _extractType(String text) {
     final lower = text.toLowerCase();
 
-    final hasCredit = _creditKeywords.any(lower.contains);
-    final hasDebit = _debitKeywords.any(lower.contains);
+    bool containsWord(String word) =>
+        RegExp('\\b${RegExp.escape(word)}\\b').hasMatch(lower);
+    final hasCredit = _creditKeywords.any(containsWord);
+    final hasDebit = _debitKeywords.any(containsWord);
 
     if (hasCredit && !hasDebit) return 'credit';
     if (hasDebit && !hasCredit) return 'debit';
@@ -239,6 +246,7 @@ class NotificationParsing {
     if (lower.contains('refund') || lower.contains('cashback')) return 'credit';
     if (lower.contains('spent') ||
         lower.contains('paid') ||
+        containsWord('sent') ||
         lower.contains('purchase')) {
       return 'debit';
     }
@@ -269,6 +277,11 @@ class NotificationParsing {
 
   static String? _sanitizeMerchant(String raw) {
     var cleaned = raw;
+    if (RegExp(r'^(?:your\s+)?(?:a/c|ac|acct|account|card)\b',
+            caseSensitive: false)
+        .hasMatch(cleaned)) {
+      return null;
+    }
 
     cleaned = cleaned.split(RegExp(r'[;,.]')).first;
     cleaned = cleaned.replaceAll(

@@ -3,21 +3,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/models/pending_transaction.dart';
-import 'package:expence_tracker/services/firestore_service.dart';
+import '../utils/transaction_identity.dart';
 
 class PendingTransactionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  /// Window used to consider an existing expense as a duplicate of a freshly
-  /// detected pending transaction. Same amount within ±24h is treated as the
-  /// same txn (covers SMS/notification timing skew).
+  /// Candidate search window; identity checks also require matching direction
+  /// and reference, or merchant within two minutes.
   static const Duration _dedupWindow = Duration(hours: 24);
 
   // Add a pending transaction
-  Future<void> addPendingTransaction(PendingTransaction transaction) async {
+  Future<bool> addPendingTransaction(PendingTransaction transaction) async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) throw StateError('User not authenticated');
 
     // Skip if this transaction looks like one the user already saved.
     if (await _isAlreadySaved(user.uid, transaction)) {
@@ -25,15 +24,51 @@ class PendingTransactionService {
         'PendingTransactionService: skipped — duplicate of saved expense '
         '(amount=${transaction.amount}, merchant=${transaction.merchantName})',
       );
-      return;
+      return false;
     }
 
+    final pending = _firestore
+        .collection('users')
+        .doc(user.uid)
+        .collection('pending_transactions');
+    final candidates = await pending
+        .where('detectedAt',
+            isGreaterThanOrEqualTo:
+                transaction.detectedAt.subtract(_dedupWindow).toIso8601String())
+        .where('detectedAt',
+            isLessThanOrEqualTo:
+                transaction.detectedAt.add(_dedupWindow).toIso8601String())
+        .get();
+    for (final doc in candidates.docs) {
+      final other = PendingTransaction.fromMap(doc.data());
+      // A replay must continue to auto-save if a previous save failed.
+      if (other.id == transaction.id) return true;
+      if (TransactionIdentity.matches(
+        amount: transaction.amount,
+        type: transaction.transactionType,
+        date: transaction.detectedAt,
+        merchant: transaction.merchantName,
+        text: transaction.rawNotificationText,
+        otherAmount: other.amount,
+        otherType: other.transactionType,
+        otherDate: other.detectedAt,
+        otherMerchant: other.merchantName,
+        otherText: other.rawNotificationText,
+      )) {
+        return false;
+      }
+    }
+
+    if (_auth.currentUser?.uid != user.uid) {
+      throw StateError('Account changed during detection');
+    }
     await _firestore
         .collection('users')
         .doc(user.uid)
         .collection('pending_transactions')
         .doc(transaction.id)
         .set(transaction.toMap());
+    return true;
   }
 
   Future<bool> _isAlreadySaved(
@@ -41,6 +76,9 @@ class PendingTransactionService {
     PendingTransaction transaction,
   ) async {
     try {
+      final expenses =
+          _firestore.collection('users').doc(uid).collection('expenses');
+      if ((await expenses.doc(transaction.id).get()).exists) return true;
       final start = transaction.detectedAt.subtract(_dedupWindow);
       final end = transaction.detectedAt.add(_dedupWindow);
 
@@ -48,17 +86,30 @@ class PendingTransactionService {
           .collection('users')
           .doc(uid)
           .collection('expenses')
-          .where('amount', isEqualTo: transaction.amount)
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
           .where('date', isLessThanOrEqualTo: Timestamp.fromDate(end))
-          .limit(1)
           .get();
 
-      return snapshot.docs.isNotEmpty;
+      return snapshot.docs.any((doc) {
+        final expense = Expense.fromJson(doc.data());
+        return TransactionIdentity.matches(
+          amount: transaction.amount,
+          type: transaction.transactionType,
+          date: transaction.detectedAt,
+          merchant: transaction.merchantName,
+          text: transaction.rawNotificationText,
+          otherAmount: expense.amount,
+          otherType:
+              expense.type == TransactionType.income ? 'credit' : 'debit',
+          otherDate: expense.date,
+          otherMerchant: expense.title,
+          otherText: expense.description,
+        );
+      });
     } catch (e) {
-      // If the lookup fails (offline, missing index), don't block the inbox.
+      // Retain the native queue for retry rather than risk an auto-save duplicate.
       debugPrint('PendingTransactionService: dedup lookup failed: $e');
-      return false;
+      rethrow;
     }
   }
 
@@ -111,8 +162,12 @@ class PendingTransactionService {
   /// pending doc, and returns the saved expense. Returns null if the
   /// pending doc was already gone (idempotent — safe to retry).
   Future<Expense?> confirmPending(String id) async {
+    final uid = _auth.currentUser?.uid;
     final pending = await getPendingById(id);
     if (pending == null) return null;
+    if (uid == null || _auth.currentUser?.uid != uid) {
+      throw StateError('Account changed during confirmation');
+    }
 
     final expense = Expense(
       id: pending.id,
@@ -126,8 +181,16 @@ class PendingTransactionService {
       type: pending.isCredit ? TransactionType.income : TransactionType.expense,
     );
 
-    await FirestoreService().addExpense(expense);
-    await deletePendingTransaction(pending.id);
+    final user = _auth.currentUser;
+    if (user == null) throw StateError('User not authenticated');
+    final root = _firestore.collection('users').doc(user.uid);
+    final batch = _firestore.batch();
+    batch.set(root.collection('expenses').doc(expense.id), {
+      ...expense.toJson(),
+      'userId': user.uid,
+    });
+    batch.delete(root.collection('pending_transactions').doc(pending.id));
+    await batch.commit();
     return expense;
   }
 

@@ -24,6 +24,8 @@ import 'package:expence_tracker/widgets/responsive_layout.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:expence_tracker/services/app_icon_switcher.dart';
+import 'package:expence_tracker/services/theme_service.dart';
+import 'package:expence_tracker/services/widget_quick_add_service.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -85,6 +87,8 @@ void main() {
       debugPrint('PendingNotificationService init failed (non-fatal): $e');
     }
 
+    await ThemeService.instance.load();
+    await WidgetQuickAddService.instance.initialize();
     runApp(const MyApp());
   }, (error, stack) {
     try {
@@ -112,6 +116,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ThemeService.instance.addListener(_onThemeChanged);
     // Initial check on app start
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkAppIconTheme();
@@ -122,8 +127,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    ThemeService.instance.removeListener(_onThemeChanged);
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_pendingActionSub?.cancel());
+    unawaited(WidgetQuickAddService.instance.dispose());
     super.dispose();
   }
 
@@ -135,8 +142,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     switch (action.actionId) {
       case PendingNotificationAction.confirm:
         try {
-          final Expense? saved =
-              await PendingTransactionService().confirmPending(action.pendingId);
+          final Expense? saved = await PendingTransactionService()
+              .confirmPending(action.pendingId);
           if (!ctx.mounted) return;
           if (saved == null) {
             showDesignSystemSnackBar(
@@ -174,9 +181,15 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _checkAppIconTheme();
   }
 
+  void _onThemeChanged() {
+    setState(() {});
+    _checkAppIconTheme();
+  }
+
   void _checkAppIconTheme() {
-    final brightness =
-        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+    final brightness = ThemeService.instance.resolveBrightness(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
     if (brightness == Brightness.dark) {
       AppIconSwitcher.switchToDark();
     } else {
@@ -192,7 +205,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       title: 'Expense Tracker',
       theme: AppDesignSystem.lightTheme,
       darkTheme: AppDesignSystem.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeService.instance.mode,
       builder: (context, child) {
         return ResponsiveLayout(
           useContainer: false, // Don't add extra shadow globally here

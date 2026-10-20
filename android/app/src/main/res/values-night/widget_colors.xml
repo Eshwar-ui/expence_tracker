@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="expense_widget_surface">#171717</color>
+    <color name="expense_widget_on_surface">#F2F1ED</color>
+    <color name="expense_widget_control">#2C2C2C</color>
+    <color name="expense_widget_primary">#F2F1ED</color>
+    <color name="expense_widget_on_primary">#171717</color>
+</resources>

@@ -129,6 +129,14 @@ Then open `ios/Runner.xcworkspace` in Xcode, select signing team and device/simu
 
 ## Tests
 
+### UPI payment handoff
+
+On Android, the main **Copy UPI ID & pay in app** action copies the recipient and opens the chosen payment app's own entry screen. The user pastes the UPI ID and enters the amount there. **Try prefilled payment instead** remains an optional external UPI handoff, which some payment apps may reject. Opening either flow never records a payment as successful by itself.
+
+Scan & Pay on Android forwards the payment QR to the selected app through `UpiPaymentBridge`. Selection uses the app's actual package, rather than guessing from its display name. Merchant fields and original transaction references are preserved; signed QR codes are forwarded unchanged and their details cannot be edited. No P2P mode or merchant identity is invented for personal QR codes.
+
+Opening a payment app is not payment confirmation. Empty or ambiguous results remain unconfirmed, and failed/submitted results do not create an expense through Scan & Pay. A payment app or bank may still reject an external request. In that case, copy the UPI ID or scan the original QR directly inside the payment app; SMS/notification intake can record the completed transaction separately. No live payment is made by the automated tests.
+
 ```bash
 flutter test
 ```
@@ -149,14 +157,26 @@ Declared in `android/app/src/main/AndroidManifest.xml`:
 
 A `<queries>` entry for `android.speech.RecognitionService` is also declared so the speech recognizer can be resolved on Android 11+.
 
+## Expense entry widgets (Android)
+
+Open **Profile → Home screen widgets** to request a widget from your launcher, or long-press the home screen and choose **Widgets → Expense Tracker**.
+
+- **Add expense**: a small one-tap shortcut to the expense entry form.
+- **Expense shortcuts**: manual entry, voice entry, and Food, Travel, and Shopping shortcuts. Category shortcuts preselect the category; you enter the amount and save.
+
+Widget taps work for both a closed and already-running app. Sign-in and the configured app lock are still required. Tapping a widget does not save an expense without review. Voice entry uses the existing microphone permission flow. Widgets show no personal balances or transaction details.
+
+The widgets use monochrome day/night surfaces, rounded controls, and a dotted plus icon to fit the Nothing OS home-screen style. They remain standard Android widgets listed under Expense Tracker in the launcher.
+
 ## Notification listener (Android)
 
-The app uses notification access to parse transaction notifications (e.g. UPI). Two services are declared:
+Open **Smart Inbox** from the home screen. Enable **SMS** for incoming bank messages and **UPI alerts** for payment app notifications. Notification access and SMS access are separate Android permissions; either source can work independently.
 
-- **flutter_notification_listener** plugin: `NotificationsHandlerService` (from the plugin).
-- **App-specific**: `NotificationCaptureService` (in `android/app/...`).
+`NotificationCaptureService` captures allowed payment app notifications. `TransactionSmsReceiver` assembles multipart incoming SMS and queues financial candidates. Both initialize their storage without requiring a running Flutter activity. Raw messages remain in a bounded local queue (500 items) until Flutter acknowledges successful processing; failed saves are retried when the app resumes.
 
-Both are bound to the same Notification Listener capability; the app coordinates parsing and deduplication. Users must enable "Notification access" for **Expense Tracker** in system Settings.
+Turn on **Auto-save detected transactions** in Smart Inbox to save high-confidence payments and income automatically. This setting defaults to off and is stored per signed-in account on the device. Valid detections with less detail remain in Review. When Flutter is not running, capture continues, and saving/review happens when the app reopens. Force-stopping the app in Android Settings prevents background capture until it is opened again. Old messages from before SMS access was granted remain available through the SMS Inbox tab.
+
+Parsing rejects OTPs, promotions, failed/pending payments and payment requests. Carrier sender prefixes do not determine whether a bank SMS is promotional. Duplicate detection compares transaction direction and references, or matching merchants within two minutes; equal amounts across the day are not enough to discard a payment. Detection and auto-save run sequentially, and confirmation saves the expense and removes its pending row in one Firestore batch.
 
 When a transaction is detected, the app fires its own heads-up notification (channel `pending_transaction_alert`) with **Confirm** / **Review** actions. Tapping **Confirm** saves the detection straight to Firestore via `PendingTransactionService.confirmPending()`. Notification taps that occur while the app is killed are replayed on launch via `getNotificationAppLaunchDetails()`.
 

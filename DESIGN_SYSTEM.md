@@ -83,7 +83,7 @@ lightBorder: #E2E8F0  // Borders (Slate 200)
 
 // Text
 textHigh: #1E293B     // Primary text (Slate 800)
-textMed: #64748B      // Secondary text (Slate 500)
+textMed: #475569      // Secondary text (Slate 500)
 textLow: #94A3B8      // Tertiary text (Slate 400)
 ```
 
@@ -725,3 +725,14 @@ LayoutBuilder(
 - Accessibility: theme text colors, `authDarkLink` for dark-mode links, password
   toggle tooltips, wrapping account switch, scrollable content when space is
   limited, and drag-to-dismiss keyboard. Authentication callbacks are unchanged.
+
+
+## Light-mode liquid glass contrast
+
+- Clip elevation shadows outside the rounded pane; a shadow under translucent
+  glass creates an unintended grey fill.
+- Light panes use a 48% white base with subtle white reflections; refraction and
+  backdrop blur remain active. High-contrast mode uses an 88% base.
+- Secondary light-mode ink is `textMed` (#475569), with explicit small-text styles.
+- Payment text uses `incomeTextLight` (#065F46) and `expenseTextLight` (#B91C1C).
+  Dark-mode payment colors retain their existing palette.

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/notification_payload.dart';
 import '../models/pending_transaction.dart';
@@ -49,9 +51,11 @@ class NotificationListenerService {
 
   StreamSubscription<dynamic>? _subscription;
   bool _isInitialized = false;
+  Future<void> _processing = Future<void>.value();
   final Map<String, DateTime> _recentProcessedKeys = <String, DateTime>{};
 
   Future<void> initialize() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     if (_isInitialized) return;
     // Flag synchronously so two concurrent callers can't both attach a
     // listener and double-process every incoming notification.
@@ -63,12 +67,12 @@ class NotificationListenerService {
 
       await _subscription?.cancel();
       _subscription = _eventChannel.receiveBroadcastStream().listen(
-        (dynamic event) async {
+        (dynamic event) {
           final payload = NotificationPayload.fromMap(
             Map<dynamic, dynamic>.from(event as Map),
           );
           debugPrint('$_logTag: live event package=${payload.packageName}');
-          await _handlePayload(payload);
+          unawaited(_processPayload(payload));
         },
         onError: (Object error, StackTrace stackTrace) {
           debugPrint('$_logTag: stream error $error');
@@ -80,10 +84,45 @@ class NotificationListenerService {
     }
   }
 
+  Future<bool> isAutoSaveEnabled() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    return (await SharedPreferences.getInstance()).getBool('auto_save_$uid') ??
+        false;
+  }
+
+  Future<void> setAutoSaveEnabled(bool enabled) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    await (await SharedPreferences.getInstance())
+        .setBool('auto_save_$uid', enabled);
+  }
+
+  Future<void> refresh() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await initialize();
+    await _drainPendingNotifications();
+  }
+
+  // Serialize live and replayed events, including the save, to avoid races.
+  Future<void> _processPayload(NotificationPayload payload) {
+    _processing = _processing.then((_) async {
+      if (FirebaseAuth.instance.currentUser == null) return;
+      await _handlePayload(payload);
+      await _methodChannel.invokeMethod<void>(
+          'acknowledgeNotification', payload.toMap());
+    }).catchError((Object error, StackTrace stack) {
+      // No acknowledgement: retry the persisted payload on the next resume.
+      debugPrint('$_logTag: processing failed; retained for retry: $error');
+    });
+    return _processing;
+  }
+
   Future<void> dispose() async {
     await _subscription?.cancel();
     _subscription = null;
     _isInitialized = false;
+    _recentProcessedKeys.clear();
     debugPrint('$_logTag: disposed');
   }
 
@@ -121,13 +160,13 @@ class NotificationListenerService {
       if (item is! Map) continue;
       final payload = NotificationPayload.fromMap(item);
       debugPrint('$_logTag: queued event package=${payload.packageName}');
-      await _handlePayload(payload);
+      await _processPayload(payload);
     }
   }
 
   Future<void> _handlePayload(NotificationPayload payload) async {
-    final title = payload.title.trim();
-    final text = payload.text.trim();
+    final title = TransactionParser.normalizeText(payload.title).trim();
+    final text = TransactionParser.normalizeText(payload.text).trim();
     if (title.isEmpty && text.isEmpty) return;
 
     // Hard-reject OTPs, cart/promo reminders, balance-only updates before
@@ -160,10 +199,8 @@ class NotificationListenerService {
     final amount = parsingResult.amount;
     if (amount == null) return;
 
-    final description = [title, text]
-        .where((part) => part.trim().isNotEmpty)
-        .join(' ')
-        .trim();
+    final description =
+        [title, text].where((part) => part.trim().isNotEmpty).join(' ').trim();
     final merchant = parsingResult.merchant?.trim().isNotEmpty == true
         ? parsingResult.merchant!.trim()
         : TransactionParser.normalizeDescription(description);
@@ -189,7 +226,18 @@ class NotificationListenerService {
       description: title.isEmpty ? null : title,
     );
 
-    await _pendingTransactionService.addPendingTransaction(pendingTransaction);
+    try {
+      final added = await _pendingTransactionService
+          .addPendingTransaction(pendingTransaction);
+      if (!added) return;
+      if (parsingResult.confidence >= 0.9 && await isAutoSaveEnabled()) {
+        await _pendingTransactionService.confirmPending(pendingTransaction.id);
+        return;
+      }
+    } catch (_) {
+      _recentProcessedKeys.remove(duplicateKey);
+      rethrow;
+    }
 
     // Surface a heads-up notification with Confirm/Review actions so the
     // user can save the detection in one tap without opening the app.

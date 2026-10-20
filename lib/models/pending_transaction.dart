@@ -53,6 +53,7 @@ class PendingTransaction {
   bool get isCredit => transactionType == 'credit';
 
   String get appName {
+    if (detectedFrom.startsWith('sms:')) return 'Bank SMS';
     if (detectedFrom.contains('google.android.apps.nbu.paisa')) {
       return 'Google Pay';
     }

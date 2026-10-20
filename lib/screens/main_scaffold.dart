@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:expence_tracker/models/expence.dart';
 import 'package:expence_tracker/screens/expense_dialog.dart';
@@ -10,6 +11,8 @@ import 'package:expence_tracker/screens/voice_capture_sheet.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:expence_tracker/services/pending_transaction_service.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
+import 'package:expence_tracker/services/widget_quick_add_service.dart';
+import 'package:expence_tracker/services/security_service.dart';
 
 class MainScaffold extends StatefulWidget {
   const MainScaffold({super.key});
@@ -19,8 +22,9 @@ class MainScaffold extends StatefulWidget {
 }
 
 class _MainScaffoldState extends State<MainScaffold>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   int _currentIndex = 0;
+  bool _handlingWidget = false;
 
   // Hold the pending-count stream on State so we don't open a fresh Firestore
   // listener every rebuild. Previously the stream was created inline in build().
@@ -29,8 +33,72 @@ class _MainScaffoldState extends State<MainScaffold>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetQuickAddService.instance.pending.addListener(_scheduleWidgetAction);
+    _scheduleWidgetAction();
     _pendingCountStream =
         PendingTransactionService().getPendingTransactionCount();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    WidgetQuickAddService.instance.pending
+        .removeListener(_scheduleWidgetAction);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _scheduleWidgetAction();
+  }
+
+  void _scheduleWidgetAction() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_handleWidgetAction());
+    });
+  }
+
+  Future<void> _handleWidgetAction() async {
+    final intake = WidgetQuickAddService.instance;
+    if (!mounted ||
+        _handlingWidget ||
+        intake.pending.value == null ||
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    _handlingWidget = true;
+    var consumed = false;
+    try {
+      final security = SecurityService();
+      final locked = await security.isLockEnabled();
+      if (!mounted || (locked && security.shouldRequireAuthOnResume())) return;
+      // Only handle after this scaffold is visible, not over a lock/auth route.
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+      final action = intake.take();
+      if (action == null) return;
+      consumed = true;
+      if (action == WidgetExpenseAction.voice) {
+        await _openVoiceQuickAdd();
+      } else {
+        final category = action.category;
+        await _openAddExpense(
+            prefill: category == null
+                ? null
+                : Expense(
+                    id: '',
+                    title: '',
+                    amount: 0,
+                    date: DateTime.now(),
+                    category: category,
+                  ));
+      }
+    } finally {
+      _handlingWidget = false;
+      if (mounted && consumed && intake.pending.value != null) {
+        _scheduleWidgetAction();
+      }
+    }
   }
 
   final List<Widget> _pages = const [
@@ -110,9 +178,9 @@ class _MainScaffoldState extends State<MainScaffold>
     );
   }
 
-  void _openAddExpense({Expense? prefill}) {
-    HapticFeedback.mediumImpact();
-    showModalBottomSheet(
+  Future<void> _openAddExpense({Expense? prefill}) async {
+    unawaited(HapticFeedback.mediumImpact());
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -133,11 +201,11 @@ class _MainScaffoldState extends State<MainScaffold>
     if (!mounted) return;
     final parsed = await VoiceCaptureSheet.show(context);
     if (!mounted || parsed == null) return;
-    _openAddExpense(prefill: parsed);
     showDesignSystemSnackBar(
       context: context,
       message: 'Heard you — review and save.',
     );
+    await _openAddExpense(prefill: parsed);
   }
 
   Widget _buildModernBottomNavBar() {
@@ -185,7 +253,8 @@ class _MainScaffoldState extends State<MainScaffold>
               ),
               // Center split pill: tap "+" for manual add, tap mic for voice
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
                 child: _AddVoicePill(
                   onAddTap: _openAddExpense,
                   onVoiceTap: _openVoiceQuickAdd,
@@ -444,69 +513,70 @@ class _ModernNavItemState extends State<_ModernNavItem>
         child: GestureDetector(
           onTap: widget.onTap,
           child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-          decoration: BoxDecoration(
-            color: widget.isActive
-                ? activeColor.withValues(alpha: 0.1)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(16),
-            border: widget.isActive
-                ? Border.all(color: activeColor.withValues(alpha: 0.3), width: 1)
-                : null,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              AnimatedBuilder(
-                animation: _scaleAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: widget.isActive ? _scaleAnimation.value : 1.0,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(
-                          opacity: animation,
-                          child: ScaleTransition(
-                            scale: animation,
-                            child: child,
-                          ),
-                        );
-                      },
-                      child: Icon(
-                        widget.isActive
-                            ? widget.activeIcon
-                            : widget.inactiveIcon,
-                        key: ValueKey<bool>(widget.isActive),
-                        color: widget.isActive ? activeColor : inactiveColor,
-                        size: 24,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeInOut,
+            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            decoration: BoxDecoration(
+              color: widget.isActive
+                  ? activeColor.withValues(alpha: 0.1)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: widget.isActive
+                  ? Border.all(
+                      color: activeColor.withValues(alpha: 0.3), width: 1)
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _scaleAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: widget.isActive ? _scaleAnimation.value : 1.0,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        transitionBuilder: (child, animation) {
+                          return FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Icon(
+                          widget.isActive
+                              ? widget.activeIcon
+                              : widget.inactiveIcon,
+                          key: ValueKey<bool>(widget.isActive),
+                          color: widget.isActive ? activeColor : inactiveColor,
+                          size: 24,
+                        ),
                       ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 4),
-              // FittedBox scales the label down on narrow phones so longer
-              // labels ("Transactions") never ellipse.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight:
-                        widget.isActive ? FontWeight.w700 : FontWeight.w500,
-                    color: widget.isActive ? activeColor : inactiveColor,
-                  ),
-                  child: Text(widget.label, maxLines: 1, softWrap: false),
+                    );
+                  },
                 ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                // FittedBox scales the label down on narrow phones so longer
+                // labels ("Transactions") never ellipse.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight:
+                          widget.isActive ? FontWeight.w700 : FontWeight.w500,
+                      color: widget.isActive ? activeColor : inactiveColor,
+                    ),
+                    child: Text(widget.label, maxLines: 1, softWrap: false),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
         ),
       ),
     );

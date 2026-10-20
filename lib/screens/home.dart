@@ -17,6 +17,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../utils/app_design_system.dart';
+import '../widgets/sky_background.dart';
 import 'expense_dialog.dart';
 
 const String _rupee = '\u20B9';
@@ -136,30 +137,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: Stack(
         children: [
-          // Keep the sky fixed while the dashboard scrolls over it.
-          Positioned.fill(
-            child: Image.asset(
-              isDark
-                  ? 'assets/home_night_sky.png'
-                  : 'assets/home_morning_sky.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              excludeFromSemantics: true,
-              gaplessPlayback: true,
-            ),
-          ),
-          // A subtle veil preserves contrast for text outside the glass cards.
-          Positioned.fill(
-            child: ColoredBox(
-              color: isDark
-                  ? AppDesignSystem.darkBg.withValues(alpha: 0.18)
-                  : AppDesignSystem.lightCanvas.withValues(alpha: 0.32),
-            ),
-          ),
+          const Positioned.fill(child: SkyBackground()),
           SafeArea(
             child: RefreshIndicator(
               onRefresh: _loadExpenses,
@@ -332,7 +313,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   children: [
                     Text(
                       _monthLabel(DateTime.now()),
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0,
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
                     ),
                     const VSpace.xs(),
                     Text(
@@ -506,7 +492,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           Text(
             label,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const VSpace.xs(),
@@ -786,7 +772,7 @@ class _SectionHeader extends StatelessWidget {
         style: theme.textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w700,
           letterSpacing: 1.2,
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+          color: theme.colorScheme.onSurfaceVariant,
         ),
       ),
     );
@@ -845,16 +831,6 @@ class _AnimatedBalanceCounter extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-extension ColorExtension on LinearGradient {
-  LinearGradient withOpacity(double opacity) {
-    return LinearGradient(
-      colors: colors.map((color) => color.withValues(alpha: opacity)).toList(),
-      begin: begin,
-      end: end,
     );
   }
 }

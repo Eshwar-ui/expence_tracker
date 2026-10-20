@@ -1,6 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Expense Tracker</string>
+    <string name="widget_add_expense">Add expense</string>
+    <string name="widget_expense_short">Expense</string>
+    <string name="widget_expense_shortcuts">Expense shortcuts</string>
+    <string name="widget_voice_expense">Voice expense</string>
+    <string name="widget_voice_short">Voice</string>
+    <string name="widget_food">Food</string>
+    <string name="widget_travel">Travel</string>
+    <string name="widget_shopping">Shopping</string>
+    <string name="widget_quick_description">Open expense entry in one tap</string>
+    <string name="widget_shortcuts_description">Add expenses with voice or a category shortcut</string>
     <string name="balance_widget_description">Expense Tracker balance widget</string>
 </resources>
 

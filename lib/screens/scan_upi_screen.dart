@@ -5,6 +5,8 @@ import 'package:expence_tracker/services/firestore_service.dart';
 import 'package:expence_tracker/services/upi_india_service.dart';
 import 'package:expence_tracker/utils/upi_payment_helper.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter_upi_india/flutter_upi_india.dart';
 import '../widgets/design_system_components.dart';
@@ -213,6 +215,7 @@ class _UPIPaymentConfirmationScreenState
           : (params['pa']?.split('@').first ?? 'Merchant');
       _payeeUPI = params['pa'] ?? '';
       _suggestedAmount = params['am'];
+      _noteController.text = params['tn'] ?? '';
 
       debugPrint('✅ Parsed UPI data:');
       debugPrint('   Payee Name: $_payeeName');
@@ -231,6 +234,53 @@ class _UPIPaymentConfirmationScreenState
     }
   }
 
+  Future<void> _payDirectly() async {
+    setState(() => _isProcessing = true);
+    try {
+      final selected = await UpiIndiaService.showUpiAppSelector(
+        context,
+        title: 'Open payment app',
+      );
+      if (selected == null || !mounted) return;
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Pay directly in your payment app'),
+          content: Text(
+            'We’ll copy $_payeeUPI and open ${selected.upiApplication.appName}. '
+            'Use its UPI ID payment option and paste the copied ID, or scan the original QR inside that app. '
+            'Confirm the recipient and amount there. '
+            'If you already attempted payment, check its status before paying again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Copy & open'),
+            ),
+          ],
+        ),
+      );
+      if (proceed != true || !mounted) return;
+      await Clipboard.setData(ClipboardData(text: _payeeUPI));
+      await UpiIndiaService.openPaymentApp(selected);
+    } catch (error) {
+      if (!mounted) return;
+      showDesignSystemSnackBar(
+        context: context,
+        message: error is PlatformException
+            ? (error.message ?? 'Could not open the payment app.')
+            : 'Could not open the payment app. Copy the UPI ID and open it manually.',
+        isError: true,
+      );
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
   Future<void> _proceedToPayment() async {
     if (!_formKey.currentState!.validate()) {
       debugPrint('❌ Form validation failed');
@@ -243,7 +293,7 @@ class _UPIPaymentConfirmationScreenState
       final amount = double.parse(_amountController.text.trim());
 
       // CRITICAL: Validate amount before proceeding
-      if (amount <= 0) {
+      if (!UPIPaymentHelper.isValidAmount(amount)) {
         throw Exception('Amount must be greater than zero');
       }
 
@@ -278,9 +328,8 @@ class _UPIPaymentConfirmationScreenState
         app: selectedApp,
         receiverUpiAddress: _payeeUPI,
         receiverName: _payeeName,
-        transactionNote: _noteController.text.trim().isEmpty
-            ? 'Payment via Expense Tracker'
-            : _noteController.text.trim(),
+        originalUpiUri: widget.upiUri,
+        transactionNote: _noteController.text.trim(),
       );
 
       if (!mounted) return;
@@ -355,7 +404,10 @@ class _UPIPaymentConfirmationScreenState
 
       showDesignSystemSnackBar(
         context: context,
-        message: 'Payment error: ${e.toString()}',
+        message: e is PlatformException
+            ? (e.message ??
+                'Could not confirm payment. Check your payment app.')
+            : 'Could not start payment. Scan the QR directly in your payment app.',
         isError: true,
       );
       setState(() => _isProcessing = false);
@@ -417,7 +469,10 @@ class _UPIPaymentConfirmationScreenState
                                     fontSize: 12,
                                     color: Theme.of(
                                       context,
-                                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                                    )
+                                        .colorScheme
+                                        .onSurface
+                                        .withValues(alpha: 0.6),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -439,7 +494,10 @@ class _UPIPaymentConfirmationScreenState
                                       fontSize: 12,
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withValues(alpha: 0.6),
+                                      )
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.6),
                                     ),
                                   ),
                                 ],
@@ -467,7 +525,10 @@ class _UPIPaymentConfirmationScreenState
               const SizedBox(height: 12),
               TextFormField(
                 controller: _amountController,
-                keyboardType: TextInputType.number,
+                readOnly: UPIPaymentHelper.hasProtectedDetails(widget.upiUri) &&
+                    _suggestedAmount != null,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 style: const TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -495,7 +556,8 @@ class _UPIPaymentConfirmationScreenState
                     return 'Please enter an amount';
                   }
                   final amount = double.tryParse(value);
-                  if (amount == null || amount <= 0) {
+                  if (amount == null ||
+                      !UPIPaymentHelper.isValidAmount(amount)) {
                     return 'Please enter a valid amount';
                   }
                   return null;
@@ -516,6 +578,10 @@ class _UPIPaymentConfirmationScreenState
               const SizedBox(height: 12),
               TextFormField(
                 controller: _noteController,
+                readOnly:
+                    UPIPaymentHelper.extractUpiParams(widget.upiUri)['sign']
+                            ?.isNotEmpty ==
+                        true,
                 decoration: InputDecoration(
                   hintText: 'What\'s this payment for?',
                   prefixIcon: const Icon(Icons.note_outlined),
@@ -535,7 +601,12 @@ class _UPIPaymentConfirmationScreenState
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton.icon(
-                  onPressed: _isProcessing ? null : _proceedToPayment,
+                  onPressed: _isProcessing
+                      ? null
+                      : (!kIsWeb &&
+                              defaultTargetPlatform == TargetPlatform.android
+                          ? _payDirectly
+                          : _proceedToPayment),
                   icon: _isProcessing
                       ? const SizedBox(
                           width: 20,
@@ -547,7 +618,12 @@ class _UPIPaymentConfirmationScreenState
                         )
                       : const Icon(Icons.payment),
                   label: Text(
-                    _isProcessing ? 'Processing...' : 'Proceed to Pay',
+                    _isProcessing
+                        ? 'Opening...'
+                        : (!kIsWeb &&
+                                defaultTargetPlatform == TargetPlatform.android
+                            ? 'Copy UPI ID & pay in app'
+                            : 'Proceed to Pay'),
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -563,7 +639,39 @@ class _UPIPaymentConfirmationScreenState
 
               const SizedBox(height: 16),
 
+              if (!kIsWeb &&
+                  defaultTargetPlatform == TargetPlatform.android) ...[
+                Text(
+                  'Paste the copied UPI ID and enter the amount in your payment app. Completed payments can be detected from bank SMS or payment alerts.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+                const VSpace.sm(),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isProcessing ? null : _proceedToPayment,
+                    icon: const Icon(Icons.payment_outlined),
+                    label: const Text('Try prefilled payment instead'),
+                  ),
+                ),
+                const VSpace.sm(),
+              ],
               // Info Text
+              TextButton.icon(
+                onPressed: _isProcessing
+                    ? null
+                    : () async {
+                        await Clipboard.setData(ClipboardData(text: _payeeUPI));
+                        if (!context.mounted) return;
+                        showDesignSystemSnackBar(
+                            context: context,
+                            message:
+                                'UPI ID copied. You can pay directly in your payment app.');
+                      },
+                icon: const Icon(Icons.copy_rounded),
+                label: const Text('Copy UPI ID to pay directly'),
+              ),
               Center(
                 child: Text(
                   'You will be redirected to your UPI app',

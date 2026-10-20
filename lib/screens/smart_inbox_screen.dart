@@ -4,6 +4,7 @@ import 'package:expence_tracker/screens/scan_screen.dart';
 import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/widgets/design_system_components.dart';
 import 'package:flutter/material.dart';
+import '../widgets/automatic_tracking_settings.dart';
 
 class SmartInboxScreen extends StatelessWidget {
   const SmartInboxScreen({super.key});
@@ -47,10 +48,7 @@ class SmartInboxScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'All detected and unreviewed transaction intake lives here.',
-                    style: theme.textTheme.bodyMedium,
-                  ),
+                  const AutomaticTrackingSettings(),
                   const VSpace.md(),
                   Container(
                     padding: const EdgeInsets.all(AppDesignSystem.s4),
@@ -63,7 +61,8 @@ class SmartInboxScreen extends StatelessWidget {
                     ),
                     child: TabBar(
                       indicator: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.14),
+                        color:
+                            theme.colorScheme.primary.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(
                           AppDesignSystem.r12,
                         ),

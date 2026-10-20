@@ -16,8 +16,7 @@ class AuthWrapper extends StatefulWidget {
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper>
-    with WidgetsBindingObserver {
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   final AuthService _authService = AuthService();
   final FcmTokenService _fcmTokenService = FcmTokenService();
   final NotificationListenerService _notificationListenerService =
@@ -47,6 +46,9 @@ class _AuthWrapperState extends State<AuthWrapper>
         state == AppLifecycleState.hidden) {
       _securityService.notifyBackgrounded();
     } else if (state == AppLifecycleState.resumed) {
+      if (_authService.currentUser != null) {
+        unawaited(_notificationListenerService.refresh());
+      }
       // If lock is enabled and the grace period elapsed, drop the unlock flag
       // so the next build shows LockScreen.
       if (_isDeviceUnlocked && _securityService.shouldRequireAuthOnResume()) {

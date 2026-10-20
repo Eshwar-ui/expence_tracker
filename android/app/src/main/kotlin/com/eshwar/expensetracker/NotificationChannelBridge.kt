@@ -27,7 +27,7 @@ object NotificationChannelBridge {
 
     private const val KEY_PENDING = "pending_notifications"
 
-    private const val MAX_PENDING = 50
+    private const val MAX_PENDING = 500
 
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -36,6 +36,10 @@ object NotificationChannelBridge {
     private var eventSink: EventChannel.EventSink? = null
     @Volatile
     private var appContext: Context? = null
+
+    fun initialize(context: Context) {
+        appContext = context.applicationContext
+    }
 
     fun attach(context: Context, messenger: BinaryMessenger) {
         appContext = context.applicationContext
@@ -61,6 +65,7 @@ object NotificationChannelBridge {
                     "getAllowedPackages" -> handleGetAllowedPackages(result)
                     "getLastNotification" -> handleGetLastNotification(result)
                     "getPendingNotifications" -> handleGetPendingNotifications(result)
+                    "acknowledgeNotification" -> handleAcknowledge(call, result)
                     "clearPendingNotifications" -> handleClearPendingNotifications(result)
                     "isListenerEnabled" -> handleIsListenerEnabled(result)
                     "openNotificationSettings" -> handleOpenNotificationSettings(result)
@@ -75,20 +80,20 @@ object NotificationChannelBridge {
         packageName: String,
         title: String,
         text: String,
-        timestamp: Long
+        timestamp: Long,
+        onComplete: (() -> Unit)? = null
     ) {
         executor.execute {
             val payload = buildPayload(packageName, title, text, timestamp)
-            Log.i(
-                TAG,
-                "Queueing notification package=$packageName title=\"$title\" text=\"$text\" timestamp=$timestamp"
-            )
+            Log.i(TAG, "Queueing notification package=$packageName timestamp=$timestamp")
             try {
                 saveLast(payload)
                 appendPending(payload)
                 emit(payload)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to enqueue notification", e)
+            } finally {
+                onComplete?.invoke()
             }
         }
     }
@@ -160,7 +165,6 @@ object NotificationChannelBridge {
         executor.execute {
             val pending = readPending(context)
             Log.i(TAG, "Returning ${pending.size} pending notifications to Flutter")
-            clearPending(context)
             mainHandler.post { result.success(pending) }
         }
     }
@@ -173,6 +177,23 @@ object NotificationChannelBridge {
         }
         executor.execute {
             clearPending(context)
+            mainHandler.post { result.success(true) }
+        }
+    }
+
+    private fun handleAcknowledge(call: MethodCall, result: Result) {
+        val context = appContext ?: return result.error("NO_CONTEXT", "Context not ready", null)
+        val payload = call.arguments as? Map<*, *>
+            ?: return result.error("INVALID_PAYLOAD", "Expected notification", null)
+        executor.execute {
+            val key = "${payload["packageName"]}|${payload["title"]}|${payload["text"]}|${payload["timestamp"]}"
+            val remaining = JSONArray()
+            val pending = readPendingArray(context)
+            for (i in 0 until pending.length()) {
+                val item = pending.optJSONObject(i) ?: continue
+                if (payloadKey(item) != key) remaining.put(item)
+            }
+            prefs(context).edit().putString(KEY_PENDING, remaining.toString()).commit()
             mainHandler.post { result.success(true) }
         }
     }
@@ -226,7 +247,6 @@ object NotificationChannelBridge {
             for (item in pending) {
                 emit(item)
             }
-            clearPending(context)
         }
     }
 
@@ -268,7 +288,7 @@ object NotificationChannelBridge {
         while (list.length() > MAX_PENDING) {
             list.remove(0)
         }
-        prefs(context).edit().putString(KEY_PENDING, list.toString()).apply()
+        prefs(context).edit().putString(KEY_PENDING, list.toString()).commit()
         Log.d(TAG, "Pending notification queue size=${list.length()}")
     }
 

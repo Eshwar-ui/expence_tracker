@@ -1,4 +1,5 @@
 import org.gradle.api.tasks.compile.JavaCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 allprojects {
@@ -34,8 +35,8 @@ subprojects {
         val javaCompile = tasks.findByName(javaCompileTaskName) as? JavaCompile
 
         if (javaCompile != null) {
-            kotlinOptions {
-                jvmTarget = javaCompile.targetCompatibility
+            compilerOptions {
+                jvmTarget.set(JvmTarget.fromTarget(javaCompile.targetCompatibility))
             }
         }
     }

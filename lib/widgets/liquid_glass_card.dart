@@ -72,18 +72,8 @@ class _LiquidGlassCardState extends State<LiquidGlassCard> {
 
     return Padding(
       padding: widget.margin ?? EdgeInsets.zero,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          boxShadow: [
-            BoxShadow(
-              color:
-                  AppDesignSystem.darkBg.withValues(alpha: dark ? 0.22 : 0.09),
-              blurRadius: AppDesignSystem.s24,
-              offset: const Offset(0, AppDesignSystem.s8),
-            ),
-          ],
-        ),
+      child: CustomPaint(
+        painter: _GlassShadow(dark: dark),
         child: ClipRRect(
           borderRadius: radius,
           child: BackdropFilter(
@@ -96,13 +86,13 @@ class _LiquidGlassCardState extends State<LiquidGlassCard> {
                           ? AppDesignSystem.darkBg
                           : AppDesignSystem.lightCanvas)
                       .withValues(
-                          alpha: highContrast ? 0.88 : (dark ? 0.30 : 0.28)),
+                          alpha: highContrast ? 0.88 : (dark ? 0.30 : 0.48)),
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      Colors.white.withValues(alpha: dark ? 0.12 : 0.30),
-                      Colors.white.withValues(alpha: 0.02),
+                      Colors.white.withValues(alpha: dark ? 0.12 : 0.26),
+                      Colors.white.withValues(alpha: dark ? 0.02 : 0.04),
                       Colors.white.withValues(alpha: dark ? 0.04 : 0.14),
                     ],
                     stops: const [0, 0.48, 1],
@@ -161,4 +151,35 @@ class _GlassRim extends CustomPainter {
 
   @override
   bool shouldRepaint(_GlassRim oldDelegate) => oldDelegate.dark != dark;
+}
+
+/// Clip the shadow out of the pane so translucent glass never samples grey fill.
+class _GlassShadow extends CustomPainter {
+  const _GlassShadow({required this.dark});
+  final bool dark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final shape = RRect.fromRectAndRadius(
+      rect,
+      const Radius.circular(AppDesignSystem.r24),
+    );
+    final outside = Path()
+      ..fillType = PathFillType.evenOdd
+      ..addRect(rect.inflate(AppDesignSystem.s48))
+      ..addRRect(shape);
+    canvas.save();
+    canvas.clipPath(outside);
+    canvas.drawShadow(
+      Path()..addRRect(shape),
+      AppDesignSystem.darkBg.withValues(alpha: dark ? 0.22 : 0.09),
+      AppDesignSystem.s8,
+      false,
+    );
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_GlassShadow oldDelegate) => oldDelegate.dark != dark;
 }

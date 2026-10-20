@@ -9,8 +9,11 @@ import 'package:expence_tracker/utils/app_design_system.dart';
 import 'package:expence_tracker/services/security_service.dart';
 import 'package:expence_tracker/services/reminder_service.dart';
 import 'package:expence_tracker/screens/export_sheet.dart';
+import 'package:expence_tracker/services/widget_quick_add_service.dart';
 import 'package:expence_tracker/models/app_user.dart';
 import 'package:intl/intl.dart';
+import '../widgets/sky_background.dart';
+import '../services/theme_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -26,8 +29,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   final ReminderService _reminderService = ReminderService();
   bool _deviceLockEnabled = false;
   bool _reminderEnabled = false;
-  TimeOfDay _reminderTime =
-      const TimeOfDay(hour: ReminderService.defaultHour, minute: ReminderService.defaultMinute);
+  TimeOfDay _reminderTime = const TimeOfDay(
+      hour: ReminderService.defaultHour, minute: ReminderService.defaultMinute);
   Future<AppUser?>? _userFuture;
 
   @override
@@ -153,41 +156,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       ),
       body: Stack(
         children: [
-          // Background Decorative Gradients (Blurred)
-          Positioned(
-            top: -100,
-            right: -50,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 100,
-            left: -100,
-            child: ImageFiltered(
-              imageFilter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-              child: Container(
-                width: 400,
-                height: 400,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: theme.colorScheme.secondary.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-          ),
-
+          const Positioned.fill(child: SkyBackground()),
           SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding: const EdgeInsets.all(AppDesignSystem.s24),
               child: Column(
                 children: [
                   // Profile Header Section
@@ -222,7 +194,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   Text(
                     kAppVersionLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                      color: theme.textTheme.bodyMedium?.color,
                       letterSpacing: 1.1,
                     ),
                   ),
@@ -241,12 +213,12 @@ class _ProfileScreenState extends State<ProfileScreen>
     return Align(
       alignment: Alignment.centerLeft,
       child: Padding(
-        padding: const EdgeInsets.only(left: 8, bottom: 8),
+        padding: const EdgeInsets.only(bottom: AppDesignSystem.s4),
         child: Text(
           title.toUpperCase(),
           style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: Theme.of(context).colorScheme.primary,
-                letterSpacing: 1.2,
+                color: Theme.of(context).colorScheme.onSurface,
+                letterSpacing: 0.5,
                 fontWeight: FontWeight.bold,
               ),
         ),
@@ -259,8 +231,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     final photoURL = user?.photoURL;
     return DesignSystemCard(
       margin: EdgeInsets.zero,
-      glass: true,
-      padding: const EdgeInsets.all(24),
+      liquidGlass: true,
+      padding: const EdgeInsets.all(AppDesignSystem.s24),
       child: Column(
         children: [
           Stack(
@@ -275,7 +247,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 ),
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  backgroundColor:
+                      theme.colorScheme.primary.withValues(alpha: 0.1),
                   backgroundImage:
                       photoURL != null ? NetworkImage(photoURL) : null,
                   child: photoURL == null
@@ -287,17 +260,21 @@ class _ProfileScreenState extends State<ProfileScreen>
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: GestureDetector(
-                  onTap: () => _showEditProfileDialog(context),
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary,
-                      shape: BoxShape.circle,
-                      boxShadow: AppDesignSystem.softShadow(Colors.black),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: theme.colorScheme.surface,
+                      width: 2,
                     ),
-                    child: const Icon(Icons.edit_rounded,
-                        size: 16, color: Colors.white),
+                    boxShadow: AppDesignSystem.softShadow(Colors.black),
+                  ),
+                  child: IconButton(
+                    tooltip: 'Edit profile',
+                    onPressed: () => _showEditProfileDialog(context),
+                    icon: const Icon(Icons.edit_rounded,
+                        size: AppDesignSystem.s20, color: Colors.white),
                   ),
                 ),
               ),
@@ -306,13 +283,16 @@ class _ProfileScreenState extends State<ProfileScreen>
           const VSpace.md(),
           Text(
             user?.displayName ?? 'Welcome Admin',
+            textAlign: TextAlign.center,
             style: theme.textTheme.headlineSmall
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
+          const VSpace.xs(),
           Text(
             user?.email ?? 'no-email@example.com',
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.textTheme.bodyMedium?.color,
             ),
           ),
           const VSpace.md(),
@@ -328,7 +308,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 return Text(
                   'Your account details are synced securely.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                   textAlign: TextAlign.center,
                 );
@@ -347,7 +327,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   Text(
                     'Your account details are synced securely.',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -362,7 +342,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildFinancialHub() {
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: EdgeInsets.zero,
       child: Column(
         children: [
@@ -398,12 +378,101 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  Future<void> _showHomeWidgets() async {
+    await showModalBottomSheet<void>(
+        context: context,
+        builder: (sheetContext) {
+          Future<void> pin(bool shortcuts) async {
+            Navigator.pop(sheetContext);
+            try {
+              final supported =
+                  await WidgetQuickAddService.pin(shortcuts: shortcuts);
+              if (!mounted) return;
+              if (!supported) {
+                showDesignSystemSnackBar(
+                    context: context,
+                    message:
+                        'Long-press your home screen, choose Widgets, then Expense Tracker.');
+              }
+            } catch (_) {
+              if (!mounted) return;
+              showDesignSystemSnackBar(
+                  context: context,
+                  message:
+                      'Add it from your home screen: long-press, Widgets, Expense Tracker.');
+            }
+          }
+
+          return SafeArea(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text('Add a home screen widget',
+                    style:
+                        TextStyle(fontSize: 20, fontWeight: FontWeight.w600))),
+            ListTile(
+                leading: const Icon(Icons.add_circle_outline_rounded),
+                title: const Text('Add expense'),
+                subtitle:
+                    const Text('Small widget · open expense entry in one tap'),
+                onTap: () => pin(false)),
+            ListTile(
+                leading: const Icon(Icons.widgets_outlined),
+                title: const Text('Expense shortcuts'),
+                subtitle:
+                    const Text('Manual, voice, Food, Travel and Shopping'),
+                onTap: () => pin(true)),
+            const SizedBox(height: 16),
+          ]));
+        });
+  }
+
   Widget _buildSettingsSection() {
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: EdgeInsets.zero,
       child: Column(
         children: [
+          _buildActionTile(
+              icon: Icons.widgets_outlined,
+              title: 'Home screen widgets',
+              subtitle: 'Add expenses without finding the app',
+              onTap: _showHomeWidgets),
+          _divider(),
+          SwitchListTile.adaptive(
+            secondary: _iconBox(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Icons.dark_mode_rounded
+                  : Icons.light_mode_rounded,
+              null,
+            ),
+            title: Text('Dark mode',
+                style: Theme.of(context).textTheme.titleSmall),
+            subtitle: Text(
+              Theme.of(context).brightness == Brightness.dark
+                  ? 'Night sky appearance'
+                  : 'Morning sky appearance',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppDesignSystem.s16,
+              vertical: AppDesignSystem.s8,
+            ),
+            value: Theme.of(context).brightness == Brightness.dark,
+            onChanged: (enabled) async {
+              try {
+                await ThemeService.instance.setDarkMode(enabled);
+              } catch (_) {
+                if (!mounted) return;
+                showDesignSystemSnackBar(
+                  context: context,
+                  message: "Couldn't save appearance. Please try again.",
+                  isError: true,
+                );
+              }
+            },
+          ),
+          _divider(),
           _buildActionTile(
             icon: Icons.security_rounded,
             title: 'Security',
@@ -493,7 +562,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Widget _buildAccountSection() {
     return DesignSystemCard(
-      glass: true,
+      liquidGlass: true,
       padding: EdgeInsets.zero,
       child: Column(
         children: [
@@ -627,7 +696,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             backgroundColor: Colors.transparent,
             insetPadding: const EdgeInsets.symmetric(horizontal: 20),
             child: DesignSystemCard(
-              glass: true,
+              liquidGlass: true,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -706,7 +775,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: Dialog(
           backgroundColor: Colors.transparent,
           child: DesignSystemCard(
-            glass: true,
+            liquidGlass: true,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
