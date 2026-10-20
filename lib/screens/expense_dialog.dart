@@ -505,7 +505,7 @@ class _ExpenseDialogState extends State<ExpenseDialog>
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) => SizeTransition(
               sizeFactor: animation,
-              axisAlignment: -1,
+              alignment: AlignmentDirectional.topStart,
               child: FadeTransition(opacity: animation, child: child),
             ),
             child: Padding(

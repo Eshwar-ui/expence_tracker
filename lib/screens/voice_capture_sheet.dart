@@ -111,9 +111,9 @@ class _VoiceCaptureSheetState extends State<VoiceCaptureSheet>
         listenMode: ListenMode.dictation,
         partialResults: true,
         cancelOnError: true,
+        pauseFor: const Duration(seconds: 3),
+        listenFor: const Duration(seconds: 30),
       ),
-      pauseFor: const Duration(seconds: 3),
-      listenFor: const Duration(seconds: 30),
     );
   }
 

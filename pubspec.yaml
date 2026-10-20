@@ -74,10 +74,7 @@ flutter:
 
   assets:
     - assets/
-    - assets/income_arrow.svg
-    - assets/expense_arrow.svg
     - assets/models/
-    - assets/animations/
     - .env
 
 # App launcher icon configuration
